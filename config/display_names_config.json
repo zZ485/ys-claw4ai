@@ -1,0 +1,30 @@
+{
+  "config_display_names": {
+    "shanghai_cross_border_association_news": "上海跨境电商协会-行业新闻",
+    "shanghai_cross_border_association_data": "上海跨境电商协会-行业数据",
+    "shanghai_cross_border_association_policy": "上海跨境电商协会-最新政策",
+    "shanghai_cross_border_association_policy_interpretation": "上海跨境电商协会-政策解读",
+    "shanghai_cross_border_association_interactive_communication": "上海跨境电商协会-互动交流",
+    
+    "ebrun_general": "亿邦动力-最新全部",
+    "ebrun_newsflash": "亿邦动力-快讯",
+    "ebrun_weight_list": "亿邦动力-独家重磅",
+    "ebrun_special_topic": "亿邦动力-专题",
+    "ebrun_column": "亿邦动力-专栏",
+    "ebrun_business_trends": "亿邦动力-商情动态",
+    
+    "ennews_information": "亿恩网-资讯",
+    "ennews_newsflash": "亿恩网-快讯",
+    
+    "dianshangbao_newsflash": "电商报-快讯",
+    "dianshangbao_retail": "电商报-零售",
+    "dianshangbao_logistics": "电商报-物流",
+    "dianshangbao_life_service": "电商报-生活服务",
+    "dianshangbao_b2b": "电商报-B2B",
+    "dianshangbao_people": "电商报-人物",
+    "dianshangbao_cross_border_ecommerce": "电商报-跨境电商",
+    "dianshangbao_industry_observation": "电商报-行业观察",
+    
+    "customs_regulations": "海关总署-海关法规"
+  }
+}

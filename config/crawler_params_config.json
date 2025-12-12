@@ -1,0 +1,71 @@
+{
+  "crawler_config": {
+    "chunk_size": 8,
+    "concurrency_settings": {
+      "max_crawlers_by_url_count": [
+        {
+          "max_urls": 50,
+          "max_crawlers": 2
+        },
+        {
+          "max_urls": 200,
+          "max_crawlers": 4
+        },
+        {
+          "max_urls": 500,
+          "max_crawlers": 6
+        },
+        {
+          "max_urls": 999999,
+          "max_crawlers": 8
+        }
+      ]
+    },
+    "batch_size_settings": {
+      "by_url_count": [
+        {
+          "max_urls": 50,
+          "batch_size": 5
+        },
+        {
+          "max_urls": 200,
+          "batch_size": 10
+        },
+        {
+          "max_urls": 500,
+          "batch_size": 20
+        },
+        {
+          "max_urls": 999999,
+          "batch_size": 50
+        }
+      ]
+    },
+    "flush_interval_settings": {
+      "by_url_count": [
+        {
+          "max_urls": 100,
+          "flush_interval": 60
+        },
+        {
+          "max_urls": 500,
+          "flush_interval": 30
+        },
+        {
+          "max_urls": 999999,
+          "flush_interval": 15
+        }
+      ]
+    },
+    "progress_settings": {
+      "progress_after_fetch": 20,
+      "progress_after_crawl": 90,
+      "progress_complete": 100
+    },
+    "error_handling": {
+      "max_retry_attempts": 3,
+      "retry_delay_seconds": 1.0,
+      "log_success_threshold": 100
+    }
+  }
+}

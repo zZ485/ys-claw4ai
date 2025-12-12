@@ -1,0 +1,11 @@
+{
+  "logger_settings": {
+    "default_log_format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    "default_log_level": "INFO",
+    "crawler_settings": {
+      "log_file": "crawler_api.log",
+      "console_output": true,
+      "log_level": "INFO"
+    }
+  }
+}

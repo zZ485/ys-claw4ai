@@ -1,0 +1,30 @@
+{
+  "preset_configs": {
+    "shanghai_cross_border_association_news": [".page-heading > h1", ".post-content > section", ".post-content > p"],
+    "shanghai_cross_border_association_data": [".page-heading > h1", ".post-content > section", ".post-content > p"],
+    "shanghai_cross_border_association_policy": [".page-heading > h1", ".post-content > h2", ".post-content > section",".post-content > p"],
+    "shanghai_cross_border_association_policy_interpretation": [".page-heading > h1",".post-content > section",".post-content > p"],
+    "shanghai_cross_border_association_interactive_communication": [".page-heading > h1",".post-content > section",".post-content > p"],
+    
+    "ebrun_general": [".post-text-title", ".post-text"],
+    "ebrun_newsflash": [".post-text-title", ".post-text p:first-child"],
+    "ebrun_weight_list": [".post-text-title", ".post-text"],
+    "ebrun_special_topic": [".post-text-title", ".post-text"],
+    "ebrun_column": [".post-text-title", ".post-text"],
+    "ebrun_business_trends": [".post-text-title", ".post-text"],
+    
+    "ennews_information": [".short_con_content_title", ".con_detail_news:nth-child(1)"],
+    "ennews_newsflash": [".short_con_content_title > h1", ".short_detail > p", ".con_detail_news"],
+    
+    "dianshangbao_newsflash": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    "dianshangbao_retail": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    "dianshangbao_logistics": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    "dianshangbao_life_service": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    "dianshangbao_b2b": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    "dianshangbao_people": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    "dianshangbao_cross_border_ecommerce": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    "dianshangbao_industry_observation": [".mb-3.border.bg-card.p-9.md\\:px-16 > h1", "#post-body"],
+    
+    "customs_regulations": ["#hgfg_con",".easysite-news-title", ".easysite-news-text"]
+  }
+}
