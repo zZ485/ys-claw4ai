@@ -242,7 +242,7 @@ class DatabaseManager:
             result = await loop.run_in_executor(
                 None, self._sync_execute_query, sql, params
             )
-            logger.info(f"查询完成，返回 {len(result)} 条记录")
+            # logger.info(f"查询完成，返回 {len(result)} 条记录")
             return result
         except Exception as e:
             logger.error(f"执行查询SQL失败: {sql}, 错误: {str(e)}")
@@ -346,8 +346,8 @@ class DatabaseManager:
                     "collection_template", task_data.get("target")
                 ),  # 使用collection_template
                 (
-                    1 if task_data.get("is_incremental") else 0
-                ),  # 0-全量, 1-增量，转换为整数
+                    int(task_data.get("task_type", task_data.get("is_incremental", 0)))
+                ),  # 0-全量, 1-增量，转换为整数，优先使用task_type
                 task_data.get("knowledge_base_name", ""),  # 知识库名称
                 task_data.get("failure_reason"),  # 失败原因
                 task_data.get("create_time", datetime.now()),  # 创建时间
@@ -399,7 +399,9 @@ class DatabaseManager:
                 task_data.get("task_name"),
                 task_data.get("task_status", task_data.get("status", "pending")),
                 task_data.get("collection_template", task_data.get("target")),
-                1 if task_data.get("is_incremental") else 0,  # 转换为整数
+                int(
+                    task_data.get("task_type", task_data.get("is_incremental", 0))
+                ),  # 转换为整数，优先使用task_type
                 task_data.get("knowledge_base_name", ""),
                 task_data.get("failure_reason"),
                 task_data.get("complete_time"),
@@ -461,6 +463,7 @@ class DatabaseManager:
             "task_status": db_task.get("task_status") or db_task.get("TASK_STATUS"),
             "collection_template": db_task.get("collection_template")
             or db_task.get("COLLECTION_TEMPLATE"),
+            "task_type": task_type,  # 添加task_type字段
             "is_incremental": task_type == 1,  # 1-增量采集, 0-全量采集
             "knowledge_base_name": db_task.get("knowledge_base_name")
             or db_task.get("KNOWLEDGE_BASE_NAME"),
@@ -506,14 +509,20 @@ class DatabaseManager:
             return []
 
     async def get_tasks_with_pagination(
-        self, page: int = 1, page_size: int = 10
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        query_conditions: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        分页获取任务信息
+        分页获取任务信息，支持条件查询
 
         Args:
             page: 页码，从1开始
             page_size: 每页大小，默认10条
+            query_conditions: 查询条件字典
+                - 模糊匹配字段: task_id_like, task_name_like, complete_time_like
+                - 等值匹配字段: collection_template, task_type, task_status, knowledge_base_name
 
         Returns:
             包含分页信息和任务列表的字典
@@ -522,18 +531,89 @@ class DatabaseManager:
             if not self._connected:
                 await self.connect()
 
+            # 如果没有提供查询条件，初始化为空字典
+            if query_conditions is None:
+                query_conditions = {}
+
             # 计算偏移量
             offset = (page - 1) * page_size
 
+            # 构建WHERE条件和参数
+            where_conditions = []
+            count_where_conditions = []
+            params = []
+            count_params = []
+
+            # 处理模糊匹配条件
+            if query_conditions.get("task_id_like"):
+                where_conditions.append("task_id LIKE ?")
+                count_where_conditions.append("task_id LIKE ?")
+                params.append(f"%{query_conditions['task_id_like']}%")
+                count_params.append(f"%{query_conditions['task_id_like']}%")
+
+            if query_conditions.get("task_name_like"):
+                where_conditions.append("task_name LIKE ?")
+                count_where_conditions.append("task_name LIKE ?")
+                params.append(f"%{query_conditions['task_name_like']}%")
+                count_params.append(f"%{query_conditions['task_name_like']}%")
+
+            if query_conditions.get("complete_time_like"):
+                where_conditions.append("complete_time LIKE ?")
+                count_where_conditions.append("complete_time LIKE ?")
+                params.append(f"%{query_conditions['complete_time_like']}%")
+                count_params.append(f"%{query_conditions['complete_time_like']}%")
+
+            # 处理等值匹配条件
+            if query_conditions.get("collection_template"):
+                where_conditions.append("collection_template = ?")
+                count_where_conditions.append("collection_template = ?")
+                params.append(query_conditions["collection_template"])
+                count_params.append(query_conditions["collection_template"])
+
+            if query_conditions.get("task_type") is not None:
+                where_conditions.append("task_type = ?")
+                count_where_conditions.append("task_type = ?")
+                params.append(query_conditions["task_type"])
+                count_params.append(query_conditions["task_type"])
+
+            if query_conditions.get("task_status"):
+                where_conditions.append("task_status = ?")
+                count_where_conditions.append("task_status = ?")
+                params.append(query_conditions["task_status"])
+                count_params.append(query_conditions["task_status"])
+
+            if query_conditions.get("knowledge_base_name"):
+                where_conditions.append("knowledge_base_name = ?")
+                count_where_conditions.append("knowledge_base_name = ?")
+                params.append(query_conditions["knowledge_base_name"])
+                count_params.append(query_conditions["knowledge_base_name"])
+
+            # 构建SQL语句
+            where_clause = (
+                " WHERE " + " AND ".join(where_conditions) if where_conditions else ""
+            )
+            count_where_clause = (
+                " WHERE " + " AND ".join(count_where_conditions)
+                if count_where_conditions
+                else ""
+            )
+
             # 获取总数
-            count_sql = "SELECT COUNT(*) as total FROM collection_task"
-            count_result = await self.execute_query(count_sql)
+            count_sql = (
+                f"SELECT COUNT(*) as total FROM collection_task{count_where_clause}"
+            )
+            count_result = await self.execute_query(
+                count_sql, tuple(count_params) if count_params else None
+            )
 
             total = count_result[0].get("total", 0) if count_result else 0
 
             # 获取分页数据
-            sql = "SELECT * FROM collection_task ORDER BY create_time DESC LIMIT ? OFFSET ?"
-            results = await self.execute_query(sql, (page_size, offset))
+            sql = f"SELECT * FROM collection_task{where_clause} ORDER BY create_time DESC LIMIT ? OFFSET ?"
+            final_params = (
+                tuple(params + [page_size, offset]) if params else (page_size, offset)
+            )
+            results = await self.execute_query(sql, final_params)
 
             tasks = [self._map_db_task_to_app(db_task) for db_task in results]
 
@@ -552,9 +632,9 @@ class DatabaseManager:
                 },
             }
 
-            logger.info(
-                f"分页查询结果: 返回 {len(tasks)} 条任务, 总数: {total}, 总页数: {total_pages}"
-            )
+            # logger.info(
+            #     f"分页查询结果: 返回 {len(tasks)} 条任务, 总数: {total}, 总页数: {total_pages}"
+            # )
             return result
         except Exception as e:
             logger.error(f"分页获取任务信息失败: {str(e)}")

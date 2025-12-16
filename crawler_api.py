@@ -83,6 +83,15 @@ class TaskStatusRequest(BaseModel):
 class TaskListRequest(BaseModel):
     page: int = 1  # 页码，从1开始，默认为1
     page_size: int = 10  # 每页大小，默认为10
+    # 模糊匹配条件
+    task_id: Optional[str] = None  # 任务编号（模糊匹配）
+    task_name: Optional[str] = None  # 任务名称（模糊匹配）
+    complete_time: Optional[str] = None  # 完成时间（模糊匹配）
+    # 等值匹配条件
+    collection_template: Optional[str] = None  # 采集模板（等值匹配）
+    task_type: Optional[int] = None  # 任务类型（0-全量，1-增量）（等值匹配）
+    task_status: Optional[str] = None  # 任务状态（等值匹配）
+    knowledge_base_name: Optional[str] = None  # 知识库（等值匹配）
 
 
 def build_response(code: int, message: str = "", data: dict = None):
@@ -376,7 +385,7 @@ async def download_file(request: DownloadRequest):
 @app.post("/tasks")
 async def get_tasks_with_pagination(request: TaskListRequest):
     """
-    分页获取任务列表
+    分页获取任务列表（支持条件查询）
     """
     try:
         # 验证页码和页大小
@@ -385,8 +394,29 @@ async def get_tasks_with_pagination(request: TaskListRequest):
         if request.page_size < 1 or request.page_size > 100:
             return build_response(code=400, message="每页大小必须在1-100之间")
 
+        # 构建查询条件
+        query_conditions = {}
+
+        # 模糊匹配条件
+        if request.task_id:
+            query_conditions["task_id_like"] = request.task_id
+        if request.task_name:
+            query_conditions["task_name_like"] = request.task_name
+        if request.complete_time:
+            query_conditions["complete_time_like"] = request.complete_time
+
+        # 等值匹配条件
+        if request.collection_template:
+            query_conditions["collection_template"] = request.collection_template
+        if request.task_type is not None:
+            query_conditions["task_type"] = request.task_type
+        if request.task_status:
+            query_conditions["task_status"] = request.task_status
+        if request.knowledge_base_name:
+            query_conditions["knowledge_base_name"] = request.knowledge_base_name
+
         result = await task_manager.get_tasks_with_pagination(
-            request.page, request.page_size
+            request.page, request.page_size, query_conditions=query_conditions
         )
 
         return build_response(code=200, message="获取任务列表成功", data=result)

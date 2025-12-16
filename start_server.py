@@ -21,9 +21,7 @@ def start_server(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="启动 Crawl4AI API 服务器"
-    )
+    parser = argparse.ArgumentParser(description="启动 Crawl4AI API 服务器")
     parser.add_argument("--host", default="127.0.0.1", help="监听地址")
     parser.add_argument("--port", type=int, default=8000, help="监听端口")
     parser.add_argument(

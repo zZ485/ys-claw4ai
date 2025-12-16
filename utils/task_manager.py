@@ -65,6 +65,7 @@ class Task:
             "collection_template": self.collection_template,
             "task_name": self.task_name,
             "task_type": self.is_incremental,  # 0-全量, 1-增量
+            "is_incremental": self.is_incremental,  # 保留原始字段，确保兼容性
             "knowledge_base_name": self.knowledge_base_name,
             "task_status": status_value,
             "failure_reason": self.failure_reason,
@@ -451,22 +452,34 @@ class TaskManager:
         return [task.to_dict() for task in sorted_tasks]
 
     async def get_tasks_with_pagination(
-        self, page: int = 1, page_size: int = 10
+        self,
+        page: int = 1,
+        page_size: int = 10,
+        query_conditions: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
-        分页获取任务列表，按创建时间排序
+        分页获取任务列表，按创建时间排序，支持条件查询
 
         Args:
             page: 页码，从1开始，默认为1
             page_size: 每页大小，默认为10
+            query_conditions: 查询条件字典
+                - 模糊匹配字段: task_id_like, task_name_like, complete_time_like
+                - 等值匹配字段: collection_template, task_type, task_status, knowledge_base_name
 
         Returns:
             Dict: 包含分页信息和任务列表的字典
         """
+        # 如果没有提供查询条件，初始化为空字典
+        if query_conditions is None:
+            query_conditions = {}
+
         # 优先从数据库获取
         if self.db_manager:
             try:
-                return await self.db_manager.get_tasks_with_pagination(page, page_size)
+                return await self.db_manager.get_tasks_with_pagination(
+                    page, page_size, query_conditions
+                )
             except Exception as e:
                 logger.error(f"数据库分页查询失败: {str(e)}")
 
@@ -477,13 +490,71 @@ class TaskManager:
             reverse=True,  # 按创建时间倒序
         )
         all_tasks = [task.to_dict() for task in sorted_tasks]
-        total = len(all_tasks)
+
+        # 应用过滤条件
+        filtered_tasks = all_tasks
+
+        # 模糊匹配条件
+        if query_conditions.get("task_id_like"):
+            keyword = query_conditions["task_id_like"].lower()
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if keyword in task.get("task_id", "").lower()
+            ]
+
+        if query_conditions.get("task_name_like"):
+            keyword = query_conditions["task_name_like"].lower()
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if keyword in task.get("task_name", "").lower()
+            ]
+
+        if query_conditions.get("complete_time_like"):
+            keyword = query_conditions["complete_time_like"]
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if task.get("complete_time") and keyword in task["complete_time"]
+            ]
+
+        # 等值匹配条件
+        if query_conditions.get("collection_template"):
+            template = query_conditions["collection_template"]
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if task.get("collection_template") == template
+            ]
+
+        if query_conditions.get("task_type") is not None:
+            task_type = query_conditions["task_type"]
+            filtered_tasks = [
+                task for task in filtered_tasks if task.get("task_type") == task_type
+            ]
+
+        if query_conditions.get("task_status"):
+            status = query_conditions["task_status"]
+            filtered_tasks = [
+                task for task in filtered_tasks if task.get("task_status") == status
+            ]
+
+        if query_conditions.get("knowledge_base_name"):
+            kb_name = query_conditions["knowledge_base_name"]
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if task.get("knowledge_base_name") == kb_name
+            ]
+
+        total = len(filtered_tasks)
         total_pages = (total + page_size - 1) // page_size
         start = (page - 1) * page_size
         end = start + page_size
 
         return {
-            "tasks": all_tasks[start:end],
+            "tasks": filtered_tasks[start:end],
             "pagination": {
                 "page": page,
                 "page_size": page_size,
