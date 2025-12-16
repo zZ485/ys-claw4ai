@@ -1,14 +1,26 @@
+import os
+import sys
+
+# 添加项目根目录到系统路径，以便导入项目模块
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# 导入增量爬取辅助模块
+from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
 import asyncio
+import argparse
 import re
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
+
 # 爬取上海跨境电商协会互动交流链接列表
 def extract_links(text):
     """从文本中提取指定格式的链接"""
     # https://www.scea.co/assoc/show/id/3740.html
-    pattern = r'https://www\.scea\.co/assoc/show/id/(\d+)\.html'
+    pattern = r"https://www\.scea\.co/assoc/show/id/(\d+)\.html"
     matches = re.findall(pattern, text)
     # 返回完整链接（去重由外部处理）
     return [f"https://www.scea.co/assoc/show/id/{id_}.html" for id_ in matches]
@@ -16,8 +28,9 @@ def extract_links(text):
 
 def sort_links_by_id_desc(links):
     """按 ID 数值降序排序链接"""
+
     def extract_id(link):
-        match = re.search(r'/id/(\d+)\.html$', link)
+        match = re.search(r"/id/(\d+)\.html$", link)
         return int(match.group(1)) if match else -1
 
     # 去重并保持唯一
@@ -26,9 +39,9 @@ def sort_links_by_id_desc(links):
     return sorted(unique_links, key=extract_id, reverse=True)
 
 
-async def get_links():
+async def get_links(is_incremental=False):
     """获取SCEA趋势链接列表
-    
+
     Returns:
         dict: 包含链接数量和链接列表的字典
     """
@@ -38,11 +51,14 @@ async def get_links():
 
     # 去重 + 按 ID 降序排序
     final_sorted_links = sort_links_by_id_desc(all_links)
-    
-    return {
-        "count": len(final_sorted_links),
-        "links": final_sorted_links
-    }
+
+    # 根据是否增量模式过滤链接
+
+    filtered_links = await filter_links_for_crawl(final_sorted_links, is_incremental)
+
+    # 准备结果
+
+    return prepare_links_result(filtered_links, is_incremental)
 
 
 async def crawl_page(page_num: int, all_links: list):
@@ -50,21 +66,20 @@ async def crawl_page(page_num: int, all_links: list):
     url = f"https://www.scea.co/portal/assoc/bulletin/p/{page_num}.html"
 
     browser_config = BrowserConfig(
-        headless=True,
-        verbose=False,
-        text_mode=True,
-        user_agent_mode="random"
+        headless=True, verbose=False, text_mode=True, user_agent_mode="random"
     )
 
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         markdown_generator=DefaultMarkdownGenerator(
-            content_filter=PruningContentFilter(threshold=0.48, threshold_type="fixed", min_word_threshold=0)
+            content_filter=PruningContentFilter(
+                threshold=0.48, threshold_type="fixed", min_word_threshold=0
+            )
         ),
         remove_overlay_elements=True,
         simulate_user=True,
         override_navigator=True,
-        target_elements=[".blog-post"]
+        target_elements=[".blog-post"],
     )
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
@@ -82,10 +97,20 @@ async def crawl_page(page_num: int, all_links: list):
 
 async def main():
     """命令行运行时的主函数，打印结果到控制台"""
-    result = await get_links()
-    
+    # 创建命令行参数解析器
+    parser = argparse.ArgumentParser(description="获取链接")
+    parser.add_argument(
+        "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
+    )
+
+    # 解析命令行参数
+    args = parser.parse_args()
+
+    # 调用get_links函数
+    result = await get_links(is_incremental=args.incremental)
+
     print(f"\n总共提取到 {result['count']} 个唯一链接（按 ID 降序）:")
-    for link in result['links']:
+    for link in result["links"]:
         print(link)
 
 

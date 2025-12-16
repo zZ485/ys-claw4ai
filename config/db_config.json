@@ -1,0 +1,11 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 5236,
+    "user": "SYSDBA",
+    "password": "123456yY",
+    "database": "SYSDBA",
+    "description": "达梦数据库连接配置",
+    "log_sql": false
+  }
+}

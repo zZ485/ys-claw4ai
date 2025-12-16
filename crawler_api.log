@@ -1,182 +1,118 @@
-2025-12-11 15:20:18,393 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-11 15:20:24,315 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy_interpretation, task_name=string, is_incremental=0
-2025-12-11 15:20:24,316 - crawler_api - INFO - 已创建采集任务: 20251211152024Asxi, 任务名称: string, 是否增量: 0
-2025-12-11 15:20:24,317 - utils.task_manager - INFO - 开始执行任务: 20251211152024Asxi
-2025-12-11 15:20:24,321 - utils.task_manager - INFO - 成功导入模块: shanghai_cross_border_association_policy_interpretation
-2025-12-11 15:20:27,301 - utils.task_manager - INFO - 任务 20251211152024Asxi 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=7
-2025-12-11 15:20:27,302 - utils.crawler_utils - INFO - 开始批量爬取，共 7 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-11 15:20:27,317 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.page-heading > h1', '.post-content > section']
-2025-12-11 15:20:27,317 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 1, 总URL组数: 1
-2025-12-11 15:20:27,317 - utils.crawler_utils - INFO - 开始处理第 1/1 组URL，包含 7 个URL
-2025-12-11 15:20:33,514 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 6.20秒
-2025-12-11 15:20:33,516 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 6.21秒, 成功 7 个, 失败 0 个
-2025-12-11 15:20:33,516 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251211152024Asxi
-2025-12-11 15:20:33,516 - utils.task_manager - INFO - 任务执行成功: 20251211152024Asxi, 成功 7 个, 失败 0 个
-2025-12-11 15:22:57,944 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-11 15:23:01,875 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy_interpretation, task_name=string, is_incremental=0
-2025-12-11 15:23:01,877 - crawler_api - INFO - 已创建采集任务: 20251211152301sxuH, 任务名称: string, 是否增量: 0
-2025-12-11 15:23:01,879 - utils.task_manager - INFO - 开始执行任务: 20251211152301sxuH
-2025-12-11 15:23:01,882 - utils.task_manager - INFO - 成功导入模块: shanghai_cross_border_association_policy_interpretation
-2025-12-11 15:23:04,750 - utils.task_manager - INFO - 任务 20251211152301sxuH 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=7
-2025-12-11 15:23:04,750 - utils.crawler_utils - INFO - 开始批量爬取，共 7 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-11 15:23:04,763 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.page-heading > h1', '.post-content']
-2025-12-11 15:23:04,763 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 1, 总URL组数: 1
-2025-12-11 15:23:04,764 - utils.crawler_utils - INFO - 开始处理第 1/1 组URL，包含 7 个URL
-2025-12-11 15:23:10,556 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 5.79秒
-2025-12-11 15:23:10,559 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 5.81秒, 成功 7 个, 失败 0 个
-2025-12-11 15:23:10,560 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251211152301sxuH
-2025-12-11 15:23:10,560 - utils.task_manager - INFO - 任务执行成功: 20251211152301sxuH, 成功 7 个, 失败 0 个
-2025-12-11 15:25:11,771 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-11 15:25:13,381 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy_interpretation, task_name=string, is_incremental=0
-2025-12-11 15:25:13,382 - crawler_api - INFO - 已创建采集任务: 20251211152513ZxnF, 任务名称: string, 是否增量: 0
-2025-12-11 15:25:13,383 - utils.task_manager - INFO - 开始执行任务: 20251211152513ZxnF
-2025-12-11 15:25:13,385 - utils.task_manager - INFO - 成功导入模块: shanghai_cross_border_association_policy_interpretation
-2025-12-11 15:25:16,128 - utils.task_manager - INFO - 任务 20251211152513ZxnF 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=7
-2025-12-11 15:25:16,129 - utils.crawler_utils - INFO - 开始批量爬取，共 7 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-11 15:25:16,143 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.page-heading > h1', '.post-content > p', '.post-content > section']
-2025-12-11 15:25:16,143 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 1, 总URL组数: 1
-2025-12-11 15:25:16,143 - utils.crawler_utils - INFO - 开始处理第 1/1 组URL，包含 7 个URL
-2025-12-11 15:25:21,748 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 5.60秒
-2025-12-11 15:25:21,750 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 5.62秒, 成功 7 个, 失败 0 个
-2025-12-11 15:25:21,751 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251211152513ZxnF
-2025-12-11 15:25:21,751 - utils.task_manager - INFO - 任务执行成功: 20251211152513ZxnF, 成功 7 个, 失败 0 个
-2025-12-11 15:30:54,944 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-11 15:30:55,588 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy_interpretation, task_name=string, is_incremental=0
-2025-12-11 15:30:55,589 - crawler_api - INFO - 已创建采集任务: 20251211153055Bntq, 任务名称: string, 是否增量: 0
-2025-12-11 15:30:55,590 - utils.task_manager - INFO - 开始执行任务: 20251211153055Bntq
-2025-12-11 15:30:55,591 - utils.task_manager - INFO - 成功导入模块: shanghai_cross_border_association_policy_interpretation
-2025-12-11 15:30:58,264 - utils.task_manager - INFO - 任务 20251211153055Bntq 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=7
-2025-12-11 15:30:58,264 - utils.crawler_utils - INFO - 开始批量爬取，共 7 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-11 15:30:58,278 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.page-heading > h1', '.post-meta', '.post-content > section', '.post-content > p']
-2025-12-11 15:30:58,278 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 1, 总URL组数: 1
-2025-12-11 15:30:58,279 - utils.crawler_utils - INFO - 开始处理第 1/1 组URL，包含 7 个URL
-2025-12-11 15:31:05,246 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 6.97秒
-2025-12-11 15:31:05,247 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 6.98秒, 成功 7 个, 失败 0 个
-2025-12-11 15:31:05,248 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251211153055Bntq
-2025-12-11 15:31:05,248 - utils.task_manager - INFO - 任务执行成功: 20251211153055Bntq, 成功 7 个, 失败 0 个
-2025-12-11 15:31:47,257 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-11 15:31:49,945 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy_interpretation, task_name=string, is_incremental=0
-2025-12-11 15:31:49,946 - crawler_api - INFO - 已创建采集任务: 20251211153149HBlI, 任务名称: string, 是否增量: 0
-2025-12-11 15:31:49,947 - utils.task_manager - INFO - 开始执行任务: 20251211153149HBlI
-2025-12-11 15:31:49,948 - utils.task_manager - INFO - 成功导入模块: shanghai_cross_border_association_policy_interpretation
-2025-12-11 15:31:52,860 - utils.task_manager - INFO - 任务 20251211153149HBlI 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=7
-2025-12-11 15:31:52,861 - utils.crawler_utils - INFO - 开始批量爬取，共 7 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-11 15:31:52,880 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.page-heading > h1', '.post-content > section', '.post-content > p']
-2025-12-11 15:31:52,880 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 1, 总URL组数: 1
-2025-12-11 15:31:52,880 - utils.crawler_utils - INFO - 开始处理第 1/1 组URL，包含 7 个URL
-2025-12-11 15:31:58,937 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 6.06秒
-2025-12-11 15:31:58,939 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 6.08秒, 成功 7 个, 失败 0 个
-2025-12-11 15:31:58,940 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251211153149HBlI
-2025-12-11 15:31:58,940 - utils.task_manager - INFO - 任务执行成功: 20251211153149HBlI, 成功 7 个, 失败 0 个
-2025-12-12 09:26:22,571 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-12 09:27:16,263 - crawler_api - INFO - 收到数据采集请求: target=ebrun_business_trends, task_name=string, is_incremental=0
-2025-12-12 09:27:16,265 - crawler_api - INFO - 已创建采集任务: 20251212092716DleW, 任务名称: string, 是否增量: 0
-2025-12-12 09:27:16,266 - utils.task_manager - INFO - 开始执行任务: 20251212092716DleW
-2025-12-12 09:27:16,268 - utils.task_manager - INFO - 成功导入模块: ebrun_business_trends
-2025-12-12 09:27:24,471 - utils.task_manager - INFO - 任务 20251212092716DleW 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=40
-2025-12-12 09:27:24,471 - utils.crawler_utils - INFO - 开始批量爬取，共 40 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-12 09:27:24,486 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.post-text-title', '.post-text']
-2025-12-12 09:27:24,487 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 2, 总URL组数: 5
-2025-12-12 09:27:24,487 - utils.crawler_utils - INFO - 开始处理第 1/5 组URL，包含 8 个URL
-2025-12-12 09:27:24,501 - utils.crawler_utils - INFO - 开始处理第 2/5 组URL，包含 8 个URL
-2025-12-12 09:27:36,453 - utils.crawler_utils - INFO - 第 2 组URL处理完成，耗时: 11.95秒
-2025-12-12 09:27:36,453 - utils.crawler_utils - INFO - 开始处理第 3/5 组URL，包含 8 个URL
-2025-12-12 09:27:36,460 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 11.97秒
-2025-12-12 09:27:36,461 - utils.crawler_utils - INFO - 开始处理第 4/5 组URL，包含 8 个URL
-2025-12-12 09:27:47,728 - utils.crawler_utils - INFO - 第 4 组URL处理完成，耗时: 11.27秒
-2025-12-12 09:27:47,729 - utils.crawler_utils - INFO - 开始处理第 5/5 组URL，包含 8 个URL
-2025-12-12 09:27:47,970 - utils.crawler_utils - INFO - 第 3 组URL处理完成，耗时: 11.52秒
-2025-12-12 09:27:54,687 - utils.crawler_utils - INFO - 第 5 组URL处理完成，耗时: 6.96秒
-2025-12-12 09:27:54,688 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 30.22秒, 成功 40 个, 失败 0 个
-2025-12-12 09:27:54,688 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251212092716DleW
-2025-12-12 09:27:54,688 - utils.task_manager - INFO - 任务执行成功: 20251212092716DleW, 成功 40 个, 失败 0 个
-2025-12-12 09:30:52,916 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-12 09:31:02,010 - crawler_api - INFO - 收到数据采集请求: target=ebrun_column, task_name=string, is_incremental=0
-2025-12-12 09:31:02,011 - crawler_api - INFO - 已创建采集任务: 20251212093102mQzw, 任务名称: string, 是否增量: 0
-2025-12-12 09:31:02,013 - utils.task_manager - INFO - 开始执行任务: 20251212093102mQzw
-2025-12-12 09:31:02,045 - utils.task_manager - INFO - 成功导入模块: ebrun_column
-2025-12-12 09:31:09,740 - utils.task_manager - INFO - 任务 20251212093102mQzw 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=20
-2025-12-12 09:31:09,741 - utils.crawler_utils - INFO - 开始批量爬取，共 20 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-12 09:31:09,753 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.post-text-title', '.post-text']
-2025-12-12 09:31:09,754 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 2, 总URL组数: 3
-2025-12-12 09:31:09,754 - utils.crawler_utils - INFO - 开始处理第 1/3 组URL，包含 8 个URL
-2025-12-12 09:31:09,767 - utils.crawler_utils - INFO - 开始处理第 2/3 组URL，包含 8 个URL
-2025-12-12 09:31:20,768 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 11.01秒
-2025-12-12 09:31:20,768 - utils.crawler_utils - INFO - 开始处理第 3/3 组URL，包含 4 个URL
-2025-12-12 09:31:22,117 - utils.crawler_utils - INFO - 第 2 组URL处理完成，耗时: 12.35秒
-2025-12-12 09:31:25,912 - utils.crawler_utils - INFO - 第 3 组URL处理完成，耗时: 5.14秒
-2025-12-12 09:31:25,913 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 16.17秒, 成功 20 个, 失败 0 个
-2025-12-12 09:31:25,914 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251212093102mQzw
-2025-12-12 09:31:25,914 - utils.task_manager - INFO - 任务执行成功: 20251212093102mQzw, 成功 20 个, 失败 0 个
-2025-12-12 09:40:37,378 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-12 09:40:42,042 - crawler_api - INFO - 收到数据采集请求: target=ebrun_weight_list, task_name=string, is_incremental=0
-2025-12-12 09:40:42,043 - crawler_api - INFO - 已创建采集任务: 20251212094042EbjR, 任务名称: string, 是否增量: 0
-2025-12-12 09:40:42,045 - utils.task_manager - INFO - 开始执行任务: 20251212094042EbjR
-2025-12-12 09:40:42,053 - utils.task_manager - INFO - 成功导入模块: ebrun_weight_list
-2025-12-12 09:40:49,066 - utils.task_manager - INFO - 任务 20251212094042EbjR 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=40
-2025-12-12 09:40:49,067 - utils.crawler_utils - INFO - 开始批量爬取，共 40 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-12 09:40:49,080 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.post-text-title', '.post-text']
-2025-12-12 09:40:49,081 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 2, 总URL组数: 5
-2025-12-12 09:40:49,081 - utils.crawler_utils - INFO - 开始处理第 1/5 组URL，包含 8 个URL
-2025-12-12 09:40:49,092 - utils.crawler_utils - INFO - 开始处理第 2/5 组URL，包含 8 个URL
-2025-12-12 09:40:59,907 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 10.83秒
-2025-12-12 09:40:59,908 - utils.crawler_utils - INFO - 开始处理第 3/5 组URL，包含 8 个URL
-2025-12-12 09:41:00,214 - utils.crawler_utils - INFO - 第 2 组URL处理完成，耗时: 11.12秒
-2025-12-12 09:41:00,215 - utils.crawler_utils - INFO - 开始处理第 4/5 组URL，包含 8 个URL
-2025-12-12 09:41:09,477 - utils.crawler_utils - INFO - 第 3 组URL处理完成，耗时: 9.57秒
-2025-12-12 09:41:09,478 - utils.crawler_utils - INFO - 开始处理第 5/5 组URL，包含 8 个URL
-2025-12-12 09:41:10,505 - utils.crawler_utils - INFO - 第 4 组URL处理完成，耗时: 10.29秒
-2025-12-12 09:41:15,675 - utils.crawler_utils - INFO - 第 5 组URL处理完成，耗时: 6.20秒
-2025-12-12 09:41:15,675 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 26.61秒, 成功 40 个, 失败 0 个
-2025-12-12 09:41:15,676 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251212094042EbjR
-2025-12-12 09:41:15,676 - utils.task_manager - INFO - 任务执行成功: 20251212094042EbjR, 成功 40 个, 失败 0 个
-2025-12-12 09:44:26,583 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-12 09:44:37,436 - crawler_api - INFO - 收到数据采集请求: target=ebrun_newsflash, task_name=string, is_incremental=0
-2025-12-12 09:44:37,437 - crawler_api - INFO - 已创建采集任务: 20251212094437TFHu, 任务名称: string, 是否增量: 0
-2025-12-12 09:44:37,440 - utils.task_manager - INFO - 开始执行任务: 20251212094437TFHu
-2025-12-12 09:44:37,449 - utils.task_manager - INFO - 成功导入模块: ebrun_newsflash
-2025-12-12 09:44:46,035 - utils.task_manager - ERROR - 任务执行失败: 20251212094437TFHu, 错误: 脚本 ebrun_newsflash.py 返回了空的链接列表
-2025-12-12 09:46:19,144 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-12 09:46:20,987 - crawler_api - INFO - 收到数据采集请求: target=ebrun_newsflash, task_name=string, is_incremental=0
-2025-12-12 09:46:20,988 - crawler_api - INFO - 已创建采集任务: 20251212094620Qrsu, 任务名称: string, 是否增量: 0
-2025-12-12 09:46:20,989 - utils.task_manager - INFO - 开始执行任务: 20251212094620Qrsu
-2025-12-12 09:46:20,998 - utils.task_manager - INFO - 成功导入模块: ebrun_newsflash
-2025-12-12 09:46:29,591 - utils.task_manager - INFO - 任务 20251212094620Qrsu 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=40
-2025-12-12 09:46:29,592 - utils.crawler_utils - INFO - 开始批量爬取，共 40 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-12 09:46:29,603 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.post-text-title', '.post-text p:first-child']
-2025-12-12 09:46:29,603 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 2, 总URL组数: 5
-2025-12-12 09:46:29,604 - utils.crawler_utils - INFO - 开始处理第 1/5 组URL，包含 8 个URL
-2025-12-12 09:46:29,613 - utils.crawler_utils - INFO - 开始处理第 2/5 组URL，包含 8 个URL
-2025-12-12 09:46:40,663 - utils.crawler_utils - INFO - 第 2 组URL处理完成，耗时: 11.05秒
-2025-12-12 09:46:40,663 - utils.crawler_utils - INFO - 开始处理第 3/5 组URL，包含 8 个URL
-2025-12-12 09:46:40,671 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 11.07秒
-2025-12-12 09:46:40,671 - utils.crawler_utils - INFO - 开始处理第 4/5 组URL，包含 8 个URL
-2025-12-12 09:46:53,995 - utils.crawler_utils - INFO - 第 3 组URL处理完成，耗时: 13.33秒
-2025-12-12 09:46:53,996 - utils.crawler_utils - INFO - 开始处理第 5/5 组URL，包含 8 个URL
-2025-12-12 09:46:54,504 - utils.crawler_utils - INFO - 第 4 组URL处理完成，耗时: 13.83秒
-2025-12-12 09:47:01,812 - utils.crawler_utils - INFO - 第 5 组URL处理完成，耗时: 7.82秒
-2025-12-12 09:47:01,813 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 32.22秒, 成功 40 个, 失败 0 个
-2025-12-12 09:47:01,813 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251212094620Qrsu
-2025-12-12 09:47:01,813 - utils.task_manager - INFO - 任务执行成功: 20251212094620Qrsu, 成功 40 个, 失败 0 个
-2025-12-12 09:52:13,631 - crawler_api - INFO - Crawl4AI API 服务启动
-2025-12-12 09:52:23,337 - crawler_api - INFO - 收到数据采集请求: target=dianshangbao_b2b, task_name=string, is_incremental=0
-2025-12-12 09:52:23,339 - crawler_api - INFO - 已创建采集任务: 20251212095223iGuA, 任务名称: string, 是否增量: 0
-2025-12-12 09:52:23,340 - utils.task_manager - INFO - 开始执行任务: 20251212095223iGuA
-2025-12-12 09:52:23,348 - utils.task_manager - INFO - 成功导入模块: dianshangbao_b2b
-2025-12-12 09:52:26,901 - utils.task_manager - INFO - 任务 20251212095223iGuA 动态参数设置完成: task_name=string, is_incremental=0, batch_size=5, flush_interval=60, links_count=40
-2025-12-12 09:52:26,902 - utils.crawler_utils - INFO - 开始批量爬取，共 40 个URL，批量写入大小: 5, 刷新间隔: 60秒
-2025-12-12 09:52:26,917 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.mb-3.border.bg-card.p-9.md\\:px-16 > h1', '#post-body']
-2025-12-12 09:52:26,917 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 2, 总URL组数: 5
-2025-12-12 09:52:26,917 - utils.crawler_utils - INFO - 开始处理第 1/5 组URL，包含 8 个URL
-2025-12-12 09:52:26,941 - utils.crawler_utils - INFO - 开始处理第 2/5 组URL，包含 8 个URL
-2025-12-12 09:52:33,251 - utils.crawler_utils - INFO - 第 2 组URL处理完成，耗时: 6.31秒
-2025-12-12 09:52:33,255 - utils.crawler_utils - INFO - 开始处理第 3/5 组URL，包含 8 个URL
-2025-12-12 09:52:33,989 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 7.07秒
-2025-12-12 09:52:33,990 - utils.crawler_utils - INFO - 开始处理第 4/5 组URL，包含 8 个URL
-2025-12-12 09:52:40,621 - utils.crawler_utils - INFO - 第 3 组URL处理完成，耗时: 7.37秒
-2025-12-12 09:52:40,621 - utils.crawler_utils - INFO - 开始处理第 5/5 组URL，包含 8 个URL
-2025-12-12 09:52:40,888 - utils.crawler_utils - INFO - 第 4 组URL处理完成，耗时: 6.90秒
-2025-12-12 09:52:45,618 - utils.crawler_utils - INFO - 第 5 组URL处理完成，耗时: 5.00秒
-2025-12-12 09:52:45,619 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 18.72秒, 成功 40 个, 失败 0 个
-2025-12-12 09:52:45,619 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251212095223iGuA
-2025-12-12 09:52:45,619 - utils.task_manager - INFO - 任务执行成功: 20251212095223iGuA, 成功 40 个, 失败 0 个
+2025-12-16 10:33:02,709 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy, task_name=shanghai_cross_border_association_policy, is_incremental=1
+2025-12-16 10:33:02,710 - config.db_config - INFO - 数据库配置 - 主机: localhost, 端口: 5236, 用户: SYSDBA, 数据库: SYSDBA
+2025-12-16 10:33:02,711 - crawler_api - ERROR - 创建任务异常: TaskManager.create_task() got an unexpected keyword argument 'target'
+2025-12-16 10:33:02,714 - crawler_api - ERROR - 异常堆栈: Traceback (most recent call last):
+  File "e:\py_project\crawl4ai\crawler_api.py", line 250, in collect_data
+    task_id = await task_manager.create_task(
+                    ~~~~~~~~~~~~~~~~~~~~~~~~^
+        target=request.target,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+        db_config=db_config
+        ^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: TaskManager.create_task() got an unexpected keyword argument 'target'
+
+2025-12-16 10:38:22,120 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy, task_name=shanghai_cross_border_association_policy, is_incremental=1
+2025-12-16 10:38:22,122 - config.db_config - INFO - 数据库配置 - 主机: localhost, 端口: 5236, 用户: SYSDBA, 数据库: SYSDBA
+2025-12-16 10:38:22,123 - utils.db_manager - INFO - 尝试连接达梦数据库: host=localhost, port=5236, user=SYSDBA, database=SYSDBA
+2025-12-16 10:38:22,218 - utils.db_manager - INFO - 使用标准参数成功连接到达梦数据库（未指定数据库）
+2025-12-16 10:38:22,230 - utils.db_manager - INFO - 数据库连接验证成功
+2025-12-16 10:38:22,230 - utils.db_manager - INFO - 成功连接到达梦数据库: localhost:5236/SYSDBA
+2025-12-16 10:38:22,241 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:38:22,241 - utils.db_manager - INFO - 任务信息已保存到数据库: 20251216103822dmRp
+2025-12-16 10:38:22,241 - utils.task_manager - INFO - 任务信息已保存到数据库: 20251216103822dmRp
+2025-12-16 10:38:22,241 - utils.task_manager - INFO - 已创建任务并添加到队列: 20251216103822dmRp, collection_template: shanghai_cross_border_association_policy, task_name=shanghai_cross_border_association_policy, is_incremental=1, knowledge_base_name=
+2025-12-16 10:38:22,242 - crawler_api - INFO - 已创建采集任务: 20251216103822dmRp, 任务名称: shanghai_cross_border_association_policy, 任务类型: 全量采集
+2025-12-16 10:38:22,242 - utils.task_manager - INFO - 开始处理任务队列
+2025-12-16 10:38:22,242 - utils.task_manager - INFO - 开始执行任务: 20251216103822dmRp
+2025-12-16 10:38:22,246 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:38:22,246 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216103822dmRp
+2025-12-16 10:38:22,250 - utils.task_manager - ERROR - 任务执行失败: 20251216103822dmRp, 错误: name 'os' is not defined
+Traceback (most recent call last):
+  File "e:\py_project\crawl4ai\utils\task_manager.py", line 260, in _execute_task
+    module = importlib.import_module(module_name)
+  File "E:\python\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 1026, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "e:\py_project\crawl4ai\get_links_script\shanghai_cross_border_association_policy.py", line 2, in <module>
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                   ^^
+NameError: name 'os' is not defined. Did you forget to import 'os'?
+2025-12-16 10:38:22,253 - utils.task_manager - ERROR - Traceback (most recent call last):
+  File "e:\py_project\crawl4ai\utils\task_manager.py", line 260, in _execute_task
+    module = importlib.import_module(module_name)
+  File "E:\python\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 1026, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "e:\py_project\crawl4ai\get_links_script\shanghai_cross_border_association_policy.py", line 2, in <module>
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                   ^^
+NameError: name 'os' is not defined. Did you forget to import 'os'?
+
+2025-12-16 10:38:22,255 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:38:22,255 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216103822dmRp
+2025-12-16 10:38:22,255 - utils.task_manager - INFO - 任务队列处理完毕
+2025-12-16 10:45:27,195 - crawler_api - INFO - 收到数据采集请求: target=shanghai_cross_border_association_policy, task_name=shanghai_cross_border_association_policy, is_incremental=1
+2025-12-16 10:45:27,196 - config.db_config - INFO - 数据库配置 - 主机: localhost, 端口: 5236, 用户: SYSDBA, 数据库: SYSDBA
+2025-12-16 10:45:27,198 - utils.db_manager - INFO - 尝试连接达梦数据库: host=localhost, port=5236, user=SYSDBA, database=SYSDBA
+2025-12-16 10:45:27,248 - utils.db_manager - INFO - 使用标准参数成功连接到达梦数据库（未指定数据库）
+2025-12-16 10:45:27,252 - utils.db_manager - INFO - 数据库连接验证成功
+2025-12-16 10:45:27,253 - utils.db_manager - INFO - 成功连接到达梦数据库: localhost:5236/SYSDBA
+2025-12-16 10:45:27,259 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:27,259 - utils.db_manager - INFO - 任务信息已保存到数据库: 20251216104527zZzl
+2025-12-16 10:45:27,259 - utils.task_manager - INFO - 任务信息已保存到数据库: 20251216104527zZzl
+2025-12-16 10:45:27,259 - utils.task_manager - INFO - 已创建任务并添加到队列: 20251216104527zZzl, collection_template: shanghai_cross_border_association_policy, task_name=shanghai_cross_border_association_policy, is_incremental=1, knowledge_base_name=
+2025-12-16 10:45:27,260 - crawler_api - INFO - 已创建采集任务: 20251216104527zZzl, 任务名称: shanghai_cross_border_association_policy, 任务类型: 全量采集
+2025-12-16 10:45:27,261 - utils.task_manager - INFO - 开始处理任务队列
+2025-12-16 10:45:27,261 - utils.task_manager - INFO - 开始执行任务: 20251216104527zZzl
+2025-12-16 10:45:27,264 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:27,264 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:27,273 - utils.task_manager - INFO - 任务 20251216104527zZzl 使用 全量采集 模式获取链接
+2025-12-16 10:45:30,117 - utils.db_manager - INFO - 查询完成，返回 1 条记录
+2025-12-16 10:45:30,124 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:30,124 - utils.db_manager - INFO - 已插入最新链接: shanghai_cross_border_association_policy -> https://www.scea.co/policy/show/id/3503.html
+2025-12-16 10:45:30,124 - utils.task_manager - INFO - 任务 20251216104527zZzl 动态参数设置完成: task_name=shanghai_cross_border_association_policy, is_incremental=1, batch_size=5, flush_interval=60, links_count=7, file_name=20251216104527zZzl (与task_id相同)
+2025-12-16 10:45:30,126 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:30,126 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:30,127 - utils.crawler_utils - INFO - 开始批量爬取，共 7 个URL，批量写入大小: 5, 刷新间隔: 60秒
+2025-12-16 10:45:30,147 - utils.crawler_utils - INFO - 爬虫配置已构建: target_elements=['.page-heading > h1', '.post-content > h2', '.post-content > section', '.post-content > p']
+2025-12-16 10:45:30,148 - utils.crawler_utils - INFO - 设置最大并发爬虫实例数: 1, 总URL组数: 1
+2025-12-16 10:45:30,148 - utils.crawler_utils - INFO - 开始处理第 1/1 组URL，包含 7 个URL
+2025-12-16 10:45:37,399 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,399 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,401 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,401 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,403 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,404 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,404 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,404 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,405 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,405 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,407 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,407 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,408 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,408 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,570 - utils.crawler_utils - INFO - 第 1 组URL处理完成，耗时: 7.42秒
+2025-12-16 10:45:37,572 - utils.crawler_utils - INFO - 批量爬取完成: 总耗时 7.45秒, 成功 7 个, 失败 0 个
+2025-12-16 10:45:37,572 - utils.crawler_utils - INFO - 所有成功爬取的URL内容已保存到文件: 20251216104527zZzl
+2025-12-16 10:45:37,573 - utils.task_manager - INFO - 任务执行成功: 20251216104527zZzl, 成功 7 个, 失败 0 个, 文件保存为: 20251216104527zZzl.json
+2025-12-16 10:45:37,574 - utils.db_manager - INFO - 更新完成，影响 1 行
+2025-12-16 10:45:37,574 - utils.db_manager - INFO - 任务信息已更新到数据库: 20251216104527zZzl
+2025-12-16 10:45:37,574 - utils.task_manager - INFO - 任务队列处理完毕
+2025-12-16 10:49:24,574 - utils.db_manager - INFO - 查询完成，返回 1 条记录
+2025-12-16 10:49:24,586 - utils.db_manager - INFO - 查询完成，返回 2 条记录
+2025-12-16 10:49:24,587 - utils.db_manager - INFO - 分页查询结果: 返回 2 条任务, 总数: 2, 总页数: 1
