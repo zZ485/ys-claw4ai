@@ -269,12 +269,11 @@ async def get_links(
         max_pages=max_pages, use_proxy=use_proxy, proxy_list=proxy_list
     )
 
-    # 去重（虽然理论上不会有重复，但确保数据的唯一性）
-    unique_urls = list(set(all_urls))
+    # # 去重（虽然理论上不会有重复，但确保数据的唯一性）
+    # unique_urls = list(set(all_urls))
 
     # 根据是否增量模式过滤链接
-
-    filtered_links = await filter_links_for_crawl(links, is_incremental)
+    filtered_links = await filter_links_for_crawl(all_urls, is_incremental)
 
     # 准备结果
 

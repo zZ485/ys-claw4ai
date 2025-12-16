@@ -369,6 +369,8 @@ async def get_links(
     # 去重（虽然理论上不会有重复，但确保数据的唯一性）
     unique_links = list(set(all_links))
 
+    unique_links.sort(key=lambda x: x.split("/")[-1].split(".")[0], reverse=True)
+
     # 使用增量爬取辅助模块过滤链接
     from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
 

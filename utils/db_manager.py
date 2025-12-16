@@ -99,7 +99,7 @@ class DatabaseManager:
                     port=self.port,
                 )
                 connection_established = True
-                logger.info("使用标准参数成功连接到达梦数据库（未指定数据库）")
+                # logger.info("使用标准参数成功连接到达梦数据库（未指定数据库）")
             except Exception as e:
                 last_exception = e
                 logger.warning(f"标准连接方式(未指定数据库)失败: {str(e)}")
@@ -183,7 +183,7 @@ class DatabaseManager:
                 cursor = self.connection.cursor()
                 cursor.execute("SELECT 1")
                 cursor.close()
-                logger.info("数据库连接验证成功")
+                # logger.info("数据库连接验证成功")
 
         except ImportError as e:
             logger.error(f"dmPython驱动导入失败: {str(e)}")
@@ -295,7 +295,7 @@ class DatabaseManager:
             result = await loop.run_in_executor(
                 None, self._sync_execute_update, sql, params
             )
-            logger.info(f"更新完成，影响 {result} 行")
+            # logger.info(f"更新完成，影响 {result} 行")
             return result
         except Exception as e:
             logger.error(f"执行更新SQL失败: {sql}, 错误: {str(e)}")
@@ -347,7 +347,7 @@ class DatabaseManager:
                 ),  # 使用collection_template
                 (
                     1 if task_data.get("is_incremental") else 0
-                ),  # 0-增量, 1-全量，转换为整数
+                ),  # 0-全量, 1-增量，转换为整数
                 task_data.get("knowledge_base_name", ""),  # 知识库名称
                 task_data.get("failure_reason"),  # 失败原因
                 task_data.get("create_time", datetime.now()),  # 创建时间
@@ -412,7 +412,7 @@ class DatabaseManager:
 
             rows_affected = await self.execute_update(sql, params)
             if rows_affected > 0:
-                logger.info(f"任务信息已更新到数据库: {task_id}")
+                # logger.info(f"任务信息已更新到数据库: {task_id}")
                 return True
             else:
                 logger.warning(f"未找到要更新的任务: {task_id}")
@@ -461,7 +461,7 @@ class DatabaseManager:
             "task_status": db_task.get("task_status") or db_task.get("TASK_STATUS"),
             "collection_template": db_task.get("collection_template")
             or db_task.get("COLLECTION_TEMPLATE"),
-            "is_incremental": task_type == 1,  # 1-全量采集, 0-增量采集
+            "is_incremental": task_type == 1,  # 1-增量采集, 0-全量采集
             "knowledge_base_name": db_task.get("knowledge_base_name")
             or db_task.get("KNOWLEDGE_BASE_NAME"),
             "failure_reason": db_task.get("failure_reason")

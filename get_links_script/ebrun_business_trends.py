@@ -366,6 +366,9 @@ async def get_links(
     # 去重（虽然理论上不会有重复，但确保数据的唯一性）
     unique_links = list(set(all_links))
 
+    # 排序（按时间顺序，降序，即最新文章在前面）链接示例：1. https://www.ebrun.com/businessnews/20251210/630171.shtml 2. https://www.ebrun.com/businessnews/20251215/630462.shtml
+    # unique_links.sort(key=lambda x: x.split('/')[-1].split('.')[0])
+    unique_links.sort(key=lambda x: x.split("/")[-1].split(".")[0], reverse=True)
     # 使用增量爬取辅助模块过滤链接
     filtered_links = await filter_links_for_crawl(unique_links, is_incremental)
 

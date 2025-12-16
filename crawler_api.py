@@ -64,7 +64,8 @@ app = FastAPI(
 class CollectRequest(BaseModel):
     target: str  # 目标配置，如 shanghai_cross_border_association_news
     task_name: str  # 任务名称
-    is_incremental: int = 0  # 是否增量，0表示增量采集，1表示全量采集
+    is_incremental: int = 0  # 是否增量，1表示增量采集，0表示全量采集
+    knowledge_base_name: str  # 知识库名称
 
 
 # class ScriptRequest(BaseModel):
@@ -228,7 +229,7 @@ async def collect_data(request: CollectRequest):
     采集数据接口：创建异步采集任务，立即返回任务ID
     """
     logger.info(
-        f"收到数据采集请求: target={request.target}, task_name={request.task_name}, is_incremental={request.is_incremental}"
+        f"收到数据采集请求: target={request.target}, task_name={request.task_name}, is_incremental={request.is_incremental}, knowledge_base_name={request.knowledge_base_name}"
     )
 
     try:
@@ -246,10 +247,11 @@ async def collect_data(request: CollectRequest):
             task_name=request.task_name,
             is_incremental=request.is_incremental,
             db_config=db_config,
+            knowledge_base_name=request.knowledge_base_name,
         )
 
         logger.info(
-            f"已创建采集任务: {task_id}, 任务名称: {request.task_name}, 任务类型: {'增量采集' if request.is_incremental == 0 else '全量采集'}"
+            f"已创建采集任务: {task_id}, 任务名称: {request.task_name}, 任务类型: {'增量采集' if request.is_incremental == 1 else '全量采集'}"
         )
 
         # 立即返回任务创建成功响应
@@ -261,6 +263,7 @@ async def collect_data(request: CollectRequest):
                 "target": request.target,
                 "task_name": request.task_name,
                 "is_incremental": request.is_incremental,
+                "knowledge_base_name": request.knowledge_base_name,
                 "file_name": task_id,  # 返回实际使用的文件名（task_id）
             },
         )
@@ -592,7 +595,7 @@ if __name__ == "__main__":
 
     print("启动 Crawl4AI API 服务...")
     print("API 文档地址: http://127.0.0.1:8000/docs")
-    print("运行模式: 单线程模式（所有请求都在主线程处理）")
+    # print("运行模式: 单线程模式（所有请求都在主线程处理）")
 
     try:
         # 启动服务器 - 单线程模式

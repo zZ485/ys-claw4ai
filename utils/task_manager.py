@@ -42,7 +42,7 @@ class Task:
         self.task_id = task_id
         self.collection_template = collection_template  # 采集模板名称
         self.task_name = task_name
-        self.is_incremental = is_incremental  # 0-增量采集, 1-全量采集
+        self.is_incremental = is_incremental  # 0-全量采集, 1-增量采集
         self.knowledge_base_name = knowledge_base_name
         self.file_name = task_id  # 保持原有逻辑：file_name 使用 task_id
         self.batch_size: int = 10  # 将根据链接数量动态调整
@@ -64,7 +64,7 @@ class Task:
             "task_id": self.task_id,
             "collection_template": self.collection_template,
             "task_name": self.task_name,
-            "task_type": self.is_incremental,  # 0-增量, 1-全量
+            "task_type": self.is_incremental,  # 0-全量, 1-增量
             "knowledge_base_name": self.knowledge_base_name,
             "task_status": status_value,
             "failure_reason": self.failure_reason,
@@ -129,7 +129,7 @@ class TaskManager:
         Args:
             target: 采集模板名称（保留原始参数名）
             task_name: 任务名称
-            is_incremental: 任务类型，0表示增量采集，1表示全量采集
+            is_incremental: 任务类型，1表示增量采集，0表示全量采集
             knowledge_base_name: 知识库名称
             db_config: 数据库配置信息（可选，如果提供则初始化数据库连接）
 
@@ -181,7 +181,7 @@ class TaskManager:
         if self.db_manager:
             try:
                 await self.db_manager.save_task(task.to_dict())
-                logger.info(f"任务信息已保存到数据库: {task_id}")
+                # logger.info(f"任务信息已保存到数据库: {task_id}")
             except Exception as e:
                 logger.error(f"保存任务到数据库失败: {str(e)}")
 
@@ -275,7 +275,7 @@ class TaskManager:
 
             # 调用get_links方法
             get_links_func = getattr(module, "get_links")
-            is_incremental = int(task.is_incremental) == 0  # 0-增量, 1-全量
+            is_incremental = int(task.is_incremental) == 1  # 1-增量, 0-全量
             logger.info(
                 f"任务 {task.task_id} 使用 "
                 f"{'增量采集' if is_incremental else '全量采集'} 模式获取链接"
@@ -297,9 +297,9 @@ class TaskManager:
                 links_result = await get_links_func(**call_kwargs)
             else:
                 links_result = await get_links_func()
-                if is_incremental:
+                if not is_incremental:
                     logger.warning(
-                        f"脚本 {script_name} 不支持增量采集模式，将使用全量采集模式"
+                        f"脚本 {script_name} 不支持全量采集模式，将使用增量采集模式"
                     )
 
             # 处理返回结果

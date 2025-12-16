@@ -237,6 +237,7 @@ async def fetch_all_posts_urls(max_pages=5, use_proxy=False, proxy_list=None):
                 if url_path:
                     # 拼接完整URL
                     full_url = f"https://www.pai.com.cn{url_path}"
+                    # print(full_url)
                     all_urls.append(full_url)
 
             # 检查是否还有下一页
@@ -298,12 +299,11 @@ async def get_links(
         max_pages=max_pages, use_proxy=use_proxy, proxy_list=proxy_list
     )
 
-    # 去重（虽然理论上不会有重复，但确保数据的唯一性）
-    unique_urls = list(set(all_urls))
+    # # 去重（虽然理论上不会有重复，但确保数据的唯一性）
+    # unique_urls = list(set(all_urls))
 
     # 根据是否增量模式过滤链接
-
-    filtered_links = await filter_links_for_crawl(links, is_incremental)
+    filtered_links = await filter_links_for_crawl(all_urls, is_incremental)
 
     # 准备结果
 
@@ -316,11 +316,6 @@ async def main():
     use_proxy = False  # 是否使用代理
     max_pages = 2  # 最大页数
 
-    print("=== 商电报专栏文章爬虫 ===")
-    print(f"最大页面数: {max_pages}")
-    print(f"使用代理: {'是' if use_proxy else '否'}")
-    print("开始爬取...")
-
     result = await get_links(use_proxy=use_proxy, max_pages=max_pages)
 
     # 打印结果
@@ -328,14 +323,6 @@ async def main():
     print(f"{mode}：总共获取到 {result['count']} 个链接:")
     for i, link in enumerate(result["links"], 1):
         print(f"{i}. {link}")
-
-    # 可选：将结果保存到文件
-    save_to_file = input("\n是否将结果保存到文件? (y/n): ").lower() == "y"
-    if save_to_file:
-        filename = f"dianshangbao_retail_links_{int(time.time())}.txt"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write("\n".join(result["links"]))
-        print(f"结果已保存到 {filename}")
 
 
 if __name__ == "__main__":

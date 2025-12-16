@@ -45,7 +45,7 @@ async def get_links(is_incremental=False):
         dict: 包含链接数量和链接列表的字典
     """
     all_links = []
-    tasks = [crawl_page(i, all_links) for i in range(1, 2)]  # 1 到 10 页
+    tasks = [crawl_page(i, all_links) for i in range(1, 5)]  # 1 到 10 页
     await asyncio.gather(*tasks)
 
     # 去重 + 按 ID 降序排序
