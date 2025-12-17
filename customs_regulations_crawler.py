@@ -44,7 +44,7 @@ class CustomsRegulationCrawler:
         """初始化爬虫"""
         self.target_config = TargetElementsConfig()
         self.customs_config = self.target_config.get_config("customs_regulations")
-        self.regulation_types = {"部门规章": [], "规范性文件": [], "其他": []}
+        self.regulation_types = {}  # 动态类型字典，不再硬编码
 
     async def get_regulation_links(self) -> Dict:
         """获取法规链接列表"""
@@ -54,8 +54,10 @@ class CustomsRegulationCrawler:
             print(f"获取法规链接失败: {e}")
             return {"count": 0, "links": []}
 
-    async def crawl_regulations_batch(self, urls: List[str]) -> List[Dict]:
-        """批量爬取法规内容，使用单个爬虫实例爬多个链接"""
+    async def crawl_regulations_batch(
+        self, urls: List[str], batch_processor=None
+    ) -> List[Dict]:
+        """批量爬取法规内容，使用单个爬虫实例爬多个链接，支持流式处理"""
         if not urls:
             return []
 
@@ -163,10 +165,15 @@ class CustomsRegulationCrawler:
                             "status": {"content": status},
                             "regulation_type": {"content": regulation_type},
                             "content": {"content": fit_markdown},
+                            "url": result.url,  # 添加URL
                         }
 
                         results.append(extracted_data)
                         print(f"  已提取: {title[:50]}...")
+
+                        # 流式处理：如果提供了批处理器，则立即处理
+                        if batch_processor:
+                            await batch_processor(extracted_data)
 
             return results
 
@@ -259,29 +266,20 @@ class CustomsRegulationCrawler:
     def classify_regulations(
         self, regulations: List[RegulationInfo]
     ) -> Dict[str, List[RegulationInfo]]:
-        """按【法规类型】分类法规"""
-        classified = {"部门规章": [], "规范性文件": [], "其他": []}
+        """按【法规类型】分类法规，支持动态类型"""
+        classified = {}  # 使用动态字典
 
         for regulation in regulations:
-            # 根据标题或内容判断法规类型
-            reg_type = regulation.regulation_type
-            if not reg_type:
-                # 如果没有明确类型，根据标题判断
-                if "规章" in regulation.title or "规定" in regulation.title:
-                    reg_type = "部门规章"
-                elif "办法" in regulation.title or "规则" in regulation.title:
-                    reg_type = "规范性文件"
-                else:
-                    reg_type = "其他"
+            # 确定法规类型
+            reg_type = self.determine_regulation_type(
+                regulation.regulation_type, regulation.title
+            )
 
-            # 标准化类型名称
-            if "规章" in reg_type:
-                reg_type = "部门规章"
-            elif "规范" in reg_type or "文件" in reg_type:
-                reg_type = "规范性文件"
-            else:
-                reg_type = "其他"
+            # 确保分类字典中有这个类型
+            if reg_type not in classified:
+                classified[reg_type] = []
 
+            # 添加到对应分类
             classified[reg_type].append(regulation)
 
         return classified
@@ -323,16 +321,228 @@ class CustomsRegulationCrawler:
                 # 创建DataFrame
                 df = pd.DataFrame(data)
 
-                # 写入Excel sheet
-                sheet_name = reg_type[:31]  # Excel sheet名称最大31个字符
+                # 写入Excel sheet，确保sheet名称符合Excel限制
+                sheet_name = reg_type[:31] if len(reg_type) > 31 else reg_type
+                # 确保sheet名称不包含Excel不支持的字符
+                invalid_chars = ["\\", "/", "*", "[", "]", ":", "?"]
+                for char in invalid_chars:
+                    sheet_name = sheet_name.replace(char, "_")
+
                 df.to_excel(writer, sheet_name=sheet_name, index=False)
 
                 print(f"已导出 {reg_type} 法规 {len(regulations)} 条")
 
         print(f"法规数据已导出到: {output_file}")
 
-    async def run(self):
-        """执行完整的爬取流程"""
+    def is_valid_regulation(self, status: str) -> bool:
+        """检查法规是否有效"""
+        return any(keyword in status for keyword in ["有效", "现行", "实施中"])
+
+    def determine_regulation_type(self, regulation_type: str, title: str) -> str:
+        """确定法规类型，支持动态类型识别"""
+        # 如果已有明确类型，直接使用
+        if regulation_type and regulation_type.strip():
+            return regulation_type.strip()
+
+        # 如果没有明确类型，根据标题判断常见的法规类型
+        if "规章" in title or "规定" in title:
+            return "部门规章"
+        elif "办法" in title or "规则" in title:
+            return "规范性文件"
+        elif "条例" in title:
+            return "条例"
+        elif "决定" in title:
+            return "决定"
+        elif "公告" in title:
+            return "公告"
+        elif "通知" in title:
+            return "通知"
+        elif "意见" in title:
+            return "意见"
+        elif "批复" in title:
+            return "批复"
+        elif "解释" in title:
+            return "解释"
+        elif "函" in title:
+            return "函"
+        else:
+            # 如果都不匹配，使用"其他"作为默认类型
+            return "其他"
+
+    async def create_stream_processor(
+        self, output_file: str = "customs_regulations.xlsx", batch_size: int = 1000
+    ):
+        """创建流式处理器，用于处理和分批存储法规数据，支持动态类型"""
+
+        # 初始化分类存储 - 使用动态字典
+        classified_data = {}
+        processed_count = 0
+        valid_count = 0
+        batch_count = 0
+
+        async def process_regulation(extracted_data):
+            nonlocal processed_count, valid_count, batch_count
+
+            # 解析法规信息
+            if not extracted_data:
+                processed_count += 1
+                return
+
+            # 提取数据
+            title_data = extracted_data.get("title", {})
+            title = (
+                title_data.get("content", "")
+                if isinstance(title_data, dict)
+                else str(title_data)
+            )
+
+            doc_number_data = extracted_data.get("document_number", {})
+            document_number = (
+                doc_number_data.get("content", "")
+                if isinstance(doc_number_data, dict)
+                else str(doc_number_data)
+            )
+
+            pub_date_data = extracted_data.get("publish_date", {})
+            publish_date = (
+                pub_date_data.get("content", "")
+                if isinstance(pub_date_data, dict)
+                else str(pub_date_data)
+            )
+
+            eff_date_data = extracted_data.get("effective_date", {})
+            effective_date = (
+                eff_date_data.get("content", "")
+                if isinstance(eff_date_data, dict)
+                else str(eff_date_data)
+            )
+
+            status_data = extracted_data.get("status", {})
+            status = (
+                status_data.get("content", "")
+                if isinstance(status_data, dict)
+                else str(status_data)
+            )
+
+            type_data = extracted_data.get("regulation_type", {})
+            regulation_type = (
+                type_data.get("content", "")
+                if isinstance(type_data, dict)
+                else str(type_data)
+            )
+
+            content_data = extracted_data.get("content", {})
+            content = (
+                content_data.get("content", "")
+                if isinstance(content_data, dict)
+                else str(content_data)
+            )
+
+            url = extracted_data.get("url", "")
+
+            processed_count += 1
+
+            # 筛选有效法规
+            if not self.is_valid_regulation(status):
+                return
+
+            valid_count += 1
+
+            # 确定法规类型
+            reg_type = self.determine_regulation_type(regulation_type, title)
+
+            # 确保分类字典中有这个类型
+            if reg_type not in classified_data:
+                classified_data[reg_type] = []
+
+            # 添加到对应分类
+            classified_data[reg_type].append(
+                {
+                    "标题": title,
+                    "文号": document_number,
+                    "发布日期": publish_date,
+                    "实施日期": effective_date,
+                    "效力": status,
+                    "法规类型": regulation_type,
+                    "主体内容": content,
+                    "URL": url,
+                }
+            )
+
+            # 达到批量大小时，写入Excel
+            if processed_count % batch_size == 0:
+                batch_count += 1
+                await self._write_batch_to_excel(
+                    classified_data, output_file, batch_count
+                )
+                # 清空数据，准备下一批
+                for reg_type in classified_data:
+                    classified_data[reg_type] = []
+
+        # 返回处理器函数和最终完成函数
+        async def finalize():
+            # 写入剩余数据
+            if any(classified_data.values()):  # 如果还有未写入的数据
+                batch_count += 1
+                await self._write_batch_to_excel(
+                    classified_data, output_file, batch_count, finalize=True
+                )
+            print(
+                f"\n流式处理完成: 共处理 {processed_count} 条，有效法规 {valid_count} 条，分 {batch_count} 批写入"
+            )
+
+        return process_regulation, finalize
+
+    async def _write_batch_to_excel(
+        self, classified_data, output_file, batch_num, finalize=False
+    ):
+        """将一批分类数据写入Excel文件"""
+        # 检查是否有数据
+        has_data = any(regulations for regulations in classified_data.values())
+        if not has_data:
+            return
+
+        # 为每批创建不同的文件名
+        if finalize:
+            batch_file = output_file
+        else:
+            # 提取文件名和扩展名
+            name, ext = os.path.splitext(output_file)
+            batch_file = f"{name}_batch_{batch_num}{ext}"
+
+        # 创建Excel写入对象
+        with pd.ExcelWriter(batch_file, engine="openpyxl") as writer:
+            for reg_type, regulations in classified_data.items():
+                if not regulations:
+                    continue
+
+                # 创建DataFrame
+                df = pd.DataFrame(regulations)
+
+                # 写入Excel sheet，确保sheet名称符合Excel限制
+                sheet_name = reg_type[:31] if len(reg_type) > 31 else reg_type
+                # 确保sheet名称不包含Excel不支持的字符
+                invalid_chars = ["\\", "/", "*", "[", "]", ":", "?"]
+                for char in invalid_chars:
+                    sheet_name = sheet_name.replace(char, "_")
+
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+
+        status = "最终文件" if finalize else f"第{batch_num}批"
+        print(f"已写入 {status}: {batch_file}")
+
+        # 统计总数
+        for reg_type, regulations in classified_data.items():
+            if regulations:
+                print(f"  {reg_type}: {len(regulations)} 条")
+
+    async def run(self, use_streaming=True, batch_size=1000):
+        """执行完整的爬取流程
+
+        Args:
+            use_streaming: 是否使用流式处理，推荐大规模数据时使用
+            batch_size: 流式处理的批量大小
+        """
         print("开始爬取海关总署法规...")
 
         # 1. 获取法规链接
@@ -341,6 +551,17 @@ class CustomsRegulationCrawler:
         total_links = links_result.get("count", 0)
         print(f"获取到 {total_links} 条法规链接")
 
+        if not use_streaming or total_links < 500:  # 小数据量使用传统方式
+            print("使用传统方式处理数据...")
+            await self._run_traditional(links, total_links)
+        else:  # 大数据量使用流式处理
+            print("使用流式处理方式处理数据...")
+            await self._run_streaming(links, total_links, batch_size)
+
+        print("爬取任务完成!")
+
+    async def _run_traditional(self, links, total_links):
+        """传统方式处理数据（内存累积方式）"""
         # 2. 批量爬取法规内容
         print("开始批量爬取法规内容...")
         crawl_results = await self.crawl_regulations_batch(links)
@@ -371,13 +592,43 @@ class CustomsRegulationCrawler:
         # 6. 导出Excel
         self.export_to_excel(classified_regulations)
 
-        print("爬取任务完成!")
+    async def _run_streaming(self, links, total_links, batch_size):
+        """流式处理数据（避免内存累积）"""
+        # 2. 创建流式处理器
+        process_regulation, finalize = await self.create_stream_processor(
+            batch_size=batch_size
+        )
+
+        # 3. 批量爬取法规内容，使用流式处理
+        print("开始批量爬取法规内容...")
+        crawl_results = await self.crawl_regulations_batch(links, process_regulation)
+
+        # 4. 完成流式处理
+        await finalize()
 
 
 async def main():
     """主函数"""
+    import argparse
+
+    # 创建命令行参数解析器
+    parser = argparse.ArgumentParser(description="海关总署法规爬取工具")
+    parser.add_argument(
+        "--batch-size", type=int, default=1000, help="流式处理的批量大小（默认1000）"
+    )
+    parser.add_argument(
+        "--traditional", action="store_true", help="使用传统方式处理（默认自动选择）"
+    )
+
+    # 解析命令行参数
+    args = parser.parse_args()
+
+    # 创建爬虫实例
     crawler = CustomsRegulationCrawler()
-    await crawler.run()
+
+    # 根据参数决定使用哪种方式
+    use_streaming = not args.traditional
+    await crawler.run(use_streaming=use_streaming, batch_size=args.batch_size)
 
 
 if __name__ == "__main__":

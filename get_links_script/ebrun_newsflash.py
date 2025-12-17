@@ -15,7 +15,11 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
+from utils.incremental_crawler import (
+    filter_links_for_crawl,
+    prepare_links_result,
+    get_latest_link_from_db,
+)
 import asyncio
 import argparse
 import aiohttp
@@ -372,7 +376,11 @@ async def get_links(
     unique_links.sort(key=lambda x: x.split("/")[-1].split(".")[0], reverse=True)
 
     # 使用增量爬取辅助模块过滤链接
-    from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
+    from utils.incremental_crawler import (
+        filter_links_for_crawl,
+        prepare_links_result,
+        get_latest_link_from_db,
+    )
 
     filtered_links = await filter_links_for_crawl(
         unique_links, is_incremental, db_manager=db_manager

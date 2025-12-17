@@ -7,7 +7,11 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # 导入增量爬取辅助模块
-from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
+from utils.incremental_crawler import (
+    filter_links_for_crawl,
+    prepare_links_result,
+    get_latest_link_from_db,
+)
 import asyncio
 import argparse
 import aiohttp
@@ -192,7 +196,9 @@ async def fetch_posts_page(session, after_cursor=None, proxy=None, max_retries=3
     return None
 
 
-async def fetch_all_posts_urls(max_pages=5, use_proxy=False, proxy_list=None):
+async def fetch_all_posts_urls(
+    max_pages=5, use_proxy=False, proxy_list=None, is_incremental=False
+):
     """
     获取多页专栏文章，返回完整URL列表
     增强反爬虫能力：支持代理、随机延时、请求头轮换
@@ -200,6 +206,15 @@ async def fetch_all_posts_urls(max_pages=5, use_proxy=False, proxy_list=None):
     all_urls = []
     after_cursor = None
     page_count = 0
+
+    # 如果是增量模式，先获取最新链接
+    latest_link = None
+    if is_incremental:
+        latest_link = await get_latest_link_from_db()
+        if latest_link:
+            print(f"增量模式：最新链接为 {latest_link}")
+        else:
+            print("增量模式：未找到最新链接，将爬取所有链接")
 
     # 准备代理列表
     proxies = []
@@ -212,7 +227,8 @@ async def fetch_all_posts_urls(max_pages=5, use_proxy=False, proxy_list=None):
     )
 
     async with aiohttp.ClientSession(connector=connector) as session:
-        while page_count < max_pages:
+        should_continue = True
+        while page_count < max_pages and should_continue:
             print(f"正在获取第 {page_count + 1} 页")
 
             # 随机选择代理（如果启用）
@@ -231,6 +247,7 @@ async def fetch_all_posts_urls(max_pages=5, use_proxy=False, proxy_list=None):
             page_info = posts.get("pageInfo", {})
 
             # 提取本页文章的完整URL
+            page_urls = []
             for edge in edges:
                 node = edge.get("node", {})
                 url_path = node.get("url", "")
@@ -238,6 +255,16 @@ async def fetch_all_posts_urls(max_pages=5, use_proxy=False, proxy_list=None):
                     # 拼接完整URL
                     full_url = f"https://www.pai.com.cn{url_path}"
                     all_urls.append(full_url)
+                    page_urls.append(full_url)
+
+            # 增量模式：检查最新链接是否在当前页面中
+            if is_incremental and latest_link:
+                if latest_link in page_urls:
+                    print(f"第 {page_count + 1} 页包含最新链接，停止爬取")
+                    # 获取最新链接之前的所有链接
+                    index = all_urls.index(latest_link)
+                    all_urls = all_urls[:index]
+                    should_continue = False
 
             # 检查是否还有下一页
             if not page_info.get("hasNextPage"):
@@ -249,7 +276,8 @@ async def fetch_all_posts_urls(max_pages=5, use_proxy=False, proxy_list=None):
             page_count += 1
 
             # 随机延时，避免请求过于规律
-            await random_delay()
+            if should_continue:
+                await random_delay()
 
     print(f"共获取 {len(all_urls)} 条专栏文章URL")
     return all_urls
@@ -293,9 +321,9 @@ async def get_links(
             print("警告：未配置有效代理，将不使用代理")
             use_proxy = False
 
-    # 获取所有URL
+    # 获取所有URL，传递增量模式参数
     all_urls = await fetch_all_posts_urls(
-        max_pages=max_pages, use_proxy=use_proxy, proxy_list=proxy_list
+        max_pages=max_pages, use_proxy=use_proxy, proxy_list=proxy_list, is_incremental=is_incremental
     )
 
     # # 去重（虽然理论上不会有重复，但确保数据的唯一性）
@@ -312,19 +340,29 @@ async def get_links(
 
 async def main():
     """命令行运行时的主函数，打印结果到控制台"""
+    # 创建命令行参数解析器
+    parser = argparse.ArgumentParser(description="获取链接")
+    parser.add_argument(
+        "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
+    )
+
+    # 解析命令行参数
+    args = parser.parse_args()
+
     # 配置选项
     use_proxy = False  # 是否使用代理
     max_pages = 2  # 最大页数
 
     print("=== 商电报专栏文章爬虫 ===")
+    mode = "增量模式" if args.incremental else "全量模式"
+    print(f"爬取模式: {mode}")
     print(f"最大页面数: {max_pages}")
     print(f"使用代理: {'是' if use_proxy else '否'}")
     print("开始爬取...")
 
-    result = await get_links(use_proxy=use_proxy, max_pages=max_pages)
+    result = await get_links(use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental)
 
     # 打印结果
-    mode = "增量模式" if result.get("is_incremental") else "全量模式"
     print(f"{mode}：总共获取到 {result['count']} 个链接:")
     for i, link in enumerate(result["links"], 1):
         print(f"{i}. {link}")

@@ -8,6 +8,7 @@ from datetime import datetime
 from typing import Optional, List
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uvicorn
@@ -50,6 +51,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# 添加CORS中间件以支持跨域请求
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 允许所有来源，可根据需要调整为特定域名
+    allow_credentials=True,
+    allow_methods=["*"],  # 允许所有HTTP方法
+    allow_headers=["*"],  # 允许所有请求头
+)
+
 
 # class CrawlerRequest(BaseModel):
 #     url: str
@@ -66,6 +76,7 @@ class CollectRequest(BaseModel):
     task_name: str  # 任务名称
     is_incremental: int = 0  # 是否增量，1表示增量采集，0表示全量采集
     knowledge_base_name: str  # 知识库名称
+    enable_cleaning: int = 1  # 是否开启清洗，1开启，0不开启，默认开启
 
 
 # class ScriptRequest(BaseModel):
@@ -257,6 +268,7 @@ async def collect_data(request: CollectRequest):
             is_incremental=request.is_incremental,
             db_config=db_config,
             knowledge_base_name=request.knowledge_base_name,
+            enable_cleaning=request.enable_cleaning,
         )
 
         logger.info(
@@ -273,6 +285,7 @@ async def collect_data(request: CollectRequest):
                 "task_name": request.task_name,
                 "is_incremental": request.is_incremental,
                 "knowledge_base_name": request.knowledge_base_name,
+                "enable_cleaning": request.enable_cleaning,
                 "file_name": task_id,  # 返回实际使用的文件名（task_id）
             },
         )
@@ -623,14 +636,14 @@ if __name__ == "__main__":
     # 设置信号处理器
     setup_signal_handlers()
 
-    print("启动 Crawl4AI API 服务...")
-    print("API 文档地址: http://127.0.0.1:8000/docs")
+    # print("启动 Crawl4AI API 服务...")
+    # print("API 文档地址: http://127.0.0.1:8000/docs")
     # print("运行模式: 单线程模式（所有请求都在主线程处理）")
 
     try:
         # 启动服务器 - 单线程模式
         uvicorn.run(
-            app, host="127.0.0.1", port=8000, log_level="info"  # 直接传递app实例
+            app, host="192.168.4.194", port=8001, log_level="info"  # 直接传递app实例
         )
     except Exception as e:
         logger.error(f"服务器运行异常: {str(e)}")

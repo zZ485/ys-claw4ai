@@ -7,7 +7,11 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # 导入增量爬取辅助模块
-from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
+from utils.incremental_crawler import (
+    filter_links_for_crawl,
+    prepare_links_result,
+    get_latest_link_from_db,
+)
 import asyncio
 import argparse
 import re
@@ -51,13 +55,7 @@ async def get_links(is_incremental=False):
 
         if not result.success:
             print("获取快讯首页失败")
-            # 根据是否增量模式过滤链接
-
-            filtered_links = await filter_links_for_crawl(links, is_incremental)
-
-            # 准备结果
-
-            return prepare_links_result(filtered_links, is_incremental)
+            return prepare_links_result([], is_incremental)
 
         # 从markdown内容中提取最新文章链接
         latest_url = None
@@ -91,32 +89,43 @@ async def get_links(is_incremental=False):
 
         if not latest_url:
             print("未找到最新快讯链接")
-            # 根据是否增量模式过滤链接
+            return prepare_links_result([], is_incremental)
 
-            filtered_links = await filter_links_for_crawl(links, is_incremental)
+        # 如果是增量模式，先获取数据库中的最新链接
+        latest_link = None
+        if is_incremental:
+            latest_link = await get_latest_link_from_db()
+            if latest_link:
+                print(f"增量模式：最新链接为 {latest_link}")
+            else:
+                print("增量模式：未找到最新链接，将生成所有链接")
 
-            # 准备结果
-
-            return prepare_links_result(filtered_links, is_incremental)
-
-        # 基于最新ID，生成最多50条链接
-        max_links = 50
+        # 基于最新ID生成链接列表
         final_links = []
+        should_continue = True
+        current_id = latest_id
 
-        for i in range(max_links):
-            current_id = latest_id - i
-            if current_id <= 0:
-                break
+        while should_continue and current_id > 0:
             link = f"https://www.ennews.com/news-{current_id}.html"
+
+            # 增量模式：检查是否已达到数据库中的最新链接
+            if is_incremental and latest_link and link == latest_link:
+                print(f"增量模式：已达到最新链接 {latest_link}，停止生成")
+                should_continue = False
+                break
+
             final_links.append(link)
 
-        # 根据是否增量模式过滤链接
+            # 全量模式：如果已经生成到news-1.html，则停止
+            if not is_incremental and current_id == 1:
+                print("全量模式：已生成到 news-1.html，停止生成")
+                should_continue = False
+                break
 
-        filtered_links = await filter_links_for_crawl(final_links, is_incremental)
+            current_id -= 1
 
         # 准备结果
-
-        return prepare_links_result(filtered_links, is_incremental)
+        return prepare_links_result(final_links, is_incremental)
 
 
 async def main():

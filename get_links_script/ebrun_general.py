@@ -7,7 +7,11 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # 导入增量爬取辅助模块
-from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
+from utils.incremental_crawler import (
+    filter_links_for_crawl,
+    prepare_links_result,
+    get_latest_link_from_db,
+)
 import asyncio
 import argparse
 import re
@@ -39,34 +43,71 @@ def extract_links(content):
 
 async def get_links(is_incremental=False):
     all_links = []
-    tasks = [crawl_page(i, all_links) for i in range(1, 2)]
-    await asyncio.gather(*tasks)
+    page_num = 1
+    should_continue = True
 
-    # 去重并排序链接（按日期和数字降序）
-    unique_links = list(set(all_links))
+    # 如果是增量模式，先获取最新链接
+    latest_link = None
+    if is_incremental:
+        latest_link = await get_latest_link_from_db()
+        if latest_link:
+            print(f"增量模式：最新链接为 {latest_link}")
+        else:
+            print("增量模式：未找到最新链接，将爬取所有链接")
 
-    # 自定义排序函数：先按日期降序，再按数字降序
-    def sort_key(url):
-        # 从URL中提取日期和数字部分
-        # 例如：https://www.ebrun.com/20251204/627840.shtml
-        parts = url.split("/")
-        date = int(parts[3])  # 获取日期部分并转为整数
-        number = int(parts[4].split(".")[0])  # 获取数字部分并转为整数
-        # 使用负号实现降序
-        return (-date, -number)
+    while should_continue:
+        print(f"正在爬取第 {page_num} 页...")
+        page_links = []
+        await crawl_page(page_num, page_links)
 
-    final_links = sorted(unique_links, key=sort_key)
+        if not page_links:
+            print(f"第 {page_num} 页没有提取到链接，停止爬取")
+            should_continue = False
+            continue
 
-    # 根据是否增量模式过滤链接
+        # 将当前页的链接与已存在的链接合并并去重
+        previous_count = len(all_links)
+        all_links.extend(page_links)
+        # 去重并按日期和数字降序排序
+        unique_links = list(set(all_links))
 
-    filtered_links = await filter_links_for_crawl(final_links, is_incremental)
+        # 自定义排序函数：先按日期降序，再按数字降序
+        def sort_key(url):
+            # 从URL中提取日期和数字部分
+            # 例如：https://www.ebrun.com/20251204/627840.shtml
+            parts = url.split("/")
+            date = int(parts[3])  # 获取日期部分并转为整数
+            number = int(parts[4].split(".")[0])  # 获取数字部分并转为整数
+            # 使用负号实现降序
+            return (-date, -number)
+
+        final_links = sorted(unique_links, key=sort_key)
+        all_links = final_links
+
+        # 如果去重后链接数量没有增加，说明该页的链接都已存在，停止爬取
+        if len(all_links) == previous_count:
+            print(f"第 {page_num} 页的所有链接都已存在，停止爬取")
+            should_continue = False
+            continue
+
+        # 增量模式：检查最新链接是否在当前页面中
+        if is_incremental and latest_link:
+            if latest_link in page_links:
+                print(f"第 {page_num} 页包含最新链接，停止爬取")
+                # 获取最新链接之前的所有链接
+                index = all_links.index(latest_link)
+                all_links = all_links[:index]
+                should_continue = False
+                continue
+
+        print(f"第 {page_num} 页新增了 {len(all_links) - previous_count} 个新链接")
+        page_num += 1
 
     # 准备结果
+    return prepare_links_result(all_links, is_incremental)
 
-    return prepare_links_result(filtered_links, is_incremental)
 
-
-async def crawl_page(page_num: int, all_links: list):
+async def crawl_page(page_num: int, links_list: list):
     # https://www.ebrun.com/information/1/
     url = f"https://www.ebrun.com/information/{page_num}/"
 
@@ -94,7 +135,7 @@ async def crawl_page(page_num: int, all_links: list):
         )
         if result.success:
             links = extract_links(result.markdown.fit_markdown)
-            all_links.extend(links)
+            links_list.extend(links)
             print(f"第 {page_num} 页提取到 {len(links)} 个链接")
         else:
             print(f"第 {page_num} 页爬取失败")

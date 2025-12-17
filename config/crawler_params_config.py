@@ -157,6 +157,16 @@ class CrawlerParamsConfig:
             },
         )
 
+    def get_memory_settings(self) -> Dict[str, Any]:
+        """获取内存优化设置"""
+        return self.get_config().get(
+            "memory_settings",
+            {
+                "memory_optimization_threshold": 1000,
+                "max_buffer_size_ratio": 0.1,
+            },
+        )
+
 
 # 创建全局配置实例
 crawler_params_config = CrawlerParamsConfig()

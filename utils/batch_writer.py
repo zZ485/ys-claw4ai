@@ -15,7 +15,13 @@ class BatchWriter:
     批量写入工具类，用于优化频繁IO操作
     """
 
-    def __init__(self, file_name: str, batch_size: int = 10, flush_interval: int = 30):
+    def __init__(
+        self,
+        file_name: str,
+        batch_size: int = 10,
+        flush_interval: int = 30,
+        max_buffer_size: int = 200,
+    ):
         """
         初始化批量写入器
 
@@ -23,10 +29,12 @@ class BatchWriter:
             file_name: 文件名
             batch_size: 达到此数量时自动写入文件，默认10条
             flush_interval: 达到此时间间隔(秒)时自动写入文件，默认30秒
+            max_buffer_size: 缓冲区最大大小，超过此值强制刷新，默认200条
         """
         self.file_name = file_name
         self.batch_size = batch_size
         self.flush_interval = flush_interval
+        self.max_buffer_size = max_buffer_size
         self.buffer: List[Dict[str, Any]] = []
         self._lock = asyncio.Lock()
         self._last_flush_time = datetime.now()
@@ -48,8 +56,11 @@ class BatchWriter:
             self.buffer.append(item)
             logger.debug(f"添加数据到缓冲区，当前缓冲区大小: {len(self.buffer)}")
 
-            # 如果达到批量写入大小，立即写入
-            if len(self.buffer) >= self.batch_size:
+            # 如果达到批量写入大小或缓冲区最大限制，立即写入
+            if (
+                len(self.buffer) >= self.batch_size
+                or len(self.buffer) >= self.max_buffer_size
+            ):
                 await self._flush_buffer()
             # 如果这是第一个元素，启动定期写入任务
             elif len(self.buffer) == 1 and self._flush_task is None:
@@ -168,7 +179,11 @@ class BatchWriterManager:
             self._initialized = True
 
     async def get_writer(
-        self, file_name: str, batch_size: int = 10, flush_interval: int = 30
+        self,
+        file_name: str,
+        batch_size: int = 10,
+        flush_interval: int = 30,
+        max_buffer_size: int = 200,
     ) -> BatchWriter:
         """
         获取或创建BatchWriter实例
@@ -177,6 +192,7 @@ class BatchWriterManager:
             file_name: 文件名
             batch_size: 批量写入大小
             flush_interval: 刷新间隔
+            max_buffer_size: 缓冲区最大大小
 
         Returns:
             BatchWriter实例
@@ -184,7 +200,7 @@ class BatchWriterManager:
         async with self._lock:
             if file_name not in self.writers:
                 self.writers[file_name] = BatchWriter(
-                    file_name, batch_size, flush_interval
+                    file_name, batch_size, flush_interval, max_buffer_size
                 )
                 # logger.info(f"创建新的批量写入器: {file_name}")
             return self.writers[file_name]

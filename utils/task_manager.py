@@ -38,12 +38,14 @@ class Task:
         task_name: str,
         is_incremental: int,
         knowledge_base_name: str = "",
+        enable_cleaning: int = 1,  # 是否开启清洗，1开启，0不开启，默认开启
     ):
         self.task_id = task_id
         self.collection_template = collection_template  # 采集模板名称
         self.task_name = task_name
         self.is_incremental = is_incremental  # 0-全量采集, 1-增量采集
         self.knowledge_base_name = knowledge_base_name
+        self.enable_cleaning = enable_cleaning  # 0-不开启清洗，1-开启清洗
         self.file_name = task_id  # 保持原有逻辑：file_name 使用 task_id
         self.batch_size: int = 10  # 将根据链接数量动态调整
         self.flush_interval: int = 30  # 将根据链接数量动态调整
@@ -67,6 +69,7 @@ class Task:
             "task_type": self.is_incremental,  # 0-全量, 1-增量
             "is_incremental": self.is_incremental,  # 保留原始字段，确保兼容性
             "knowledge_base_name": self.knowledge_base_name,
+            "enable_cleaning": self.enable_cleaning,  # 是否开启清洗
             "task_status": status_value,
             "failure_reason": self.failure_reason,
             "create_time": self.created_at,
@@ -122,6 +125,7 @@ class TaskManager:
         task_name: str,
         is_incremental: int,
         knowledge_base_name: str = "",
+        enable_cleaning: int = 1,  # 是否开启清洗，1开启，0不开启，默认开启
         db_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
@@ -132,6 +136,7 @@ class TaskManager:
             task_name: 任务名称
             is_incremental: 任务类型，1表示增量采集，0表示全量采集
             knowledge_base_name: 知识库名称
+            enable_cleaning: 是否开启清洗，1开启，0不开启，默认开启
             db_config: 数据库配置信息（可选，如果提供则初始化数据库连接）
 
         Returns:
@@ -172,6 +177,7 @@ class TaskManager:
             task_name=task_name,
             is_incremental=is_incremental,
             knowledge_base_name=knowledge_base_name,
+            enable_cleaning=enable_cleaning,
         )
         self.tasks[task_id] = task
 
@@ -206,7 +212,7 @@ class TaskManager:
             return
 
         self.is_task_running = True
-        logger.info("开始处理任务队列")
+        # logger.info("开始处理任务队列")
 
         while self.task_queue:
             task_id = self.task_queue.pop(0)
@@ -223,7 +229,7 @@ class TaskManager:
             await self._execute_task(task)
 
         self.is_task_running = False
-        logger.info("任务队列处理完毕")
+        # logger.info("任务队列处理完毕")
 
     async def _execute_task(self, task: Task):
         """在后台执行任务"""
@@ -327,6 +333,8 @@ class TaskManager:
             # 动态设置任务参数
             links_count = len(links)
             progress_settings = crawler_params_config.get_progress_settings()
+            memory_settings = crawler_params_config.get_memory_settings()
+
             task.progress = progress_settings.get("progress_after_fetch", 20)
             task.total_links = links_count
             task.batch_size = crawler_params_config.get_batch_size(links_count)
@@ -366,13 +374,24 @@ class TaskManager:
                             self.db_manager.update_task(task.task_id, task.to_dict())
                         )
 
+            # 根据enable_cleaning决定是否传递target_elements
+            target_elements = (
+                configs[task.collection_template] if task.enable_cleaning == 1 else None
+            )
+
+            # 从配置中获取内存优化阈值
+            memory_optimization_threshold = memory_settings.get(
+                "memory_optimization_threshold", 1000
+            )
+
             result = await crawl_urls(
                 urls=links,
-                target_elements=configs[task.collection_template],
+                target_elements=target_elements,
                 file_name=task.file_name,  # 保持原有逻辑，使用file_name
                 batch_size=task.batch_size,
                 flush_interval=task.flush_interval,
                 progress_callback=progress_callback,
+                memory_optimization_threshold=memory_optimization_threshold,  # 使用配置中的内存优化阈值
             )
 
             # 更新任务结果
@@ -565,35 +584,35 @@ class TaskManager:
             },
         }
 
-    async def cancel_task(self, task_id: str) -> bool:
-        """
-        取消任务（对队列中和未开始执行的任务有效）
+    # async def cancel_task(self, task_id: str) -> bool:
+    #     """
+    #     取消任务（对队列中和未开始执行的任务有效）
 
-        Args:
-            task_id: 任务ID
+    #     Args:
+    #         task_id: 任务ID
 
-        Returns:
-            bool: 是否成功取消
-        """
-        task = self.tasks.get(task_id)
-        if not task:
-            return False
+    #     Returns:
+    #         bool: 是否成功取消
+    #     """
+    #     task = self.tasks.get(task_id)
+    #     if not task:
+    #         return False
 
-        if task.status == TaskStatus.PENDING:
-            if task_id in self.task_queue:
-                self.task_queue.remove(task_id)
+    #     if task.status == TaskStatus.PENDING:
+    #         if task_id in self.task_queue:
+    #             self.task_queue.remove(task_id)
 
-            task.status = TaskStatus.CANCELLED
-            task.completed_at = datetime.now()
-            task.failure_reason = "任务被用户取消"
+    #         task.status = TaskStatus.CANCELLED
+    #         task.completed_at = datetime.now()
+    #         task.failure_reason = "任务被用户取消"
 
-            if self.db_manager:
-                await self.db_manager.update_task(task.task_id, task.to_dict())
+    #         if self.db_manager:
+    #             await self.db_manager.update_task(task.task_id, task.to_dict())
 
-            logger.info(f"任务已取消: {task_id}")
-            return True
+    #         logger.info(f"任务已取消: {task_id}")
+    #         return True
 
-        return False
+    #     return False
 
     async def disconnect_db(self):
         """断开数据库连接"""

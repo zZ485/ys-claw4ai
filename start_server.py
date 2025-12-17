@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 
 def start_server(
-    host="127.0.0.1", port=8000, workers=1, reload=False, log_level="info"
+    host="192.168.4.194", port=8001, workers=1, reload=False, log_level="info"
 ):
     import uvicorn
 
@@ -22,8 +22,8 @@ def start_server(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="启动 Crawl4AI API 服务器")
-    parser.add_argument("--host", default="127.0.0.1", help="监听地址")
-    parser.add_argument("--port", type=int, default=8000, help="监听端口")
+    parser.add_argument("--host", default="192.168.4.194", help="监听地址")
+    parser.add_argument("--port", type=int, default=8001, help="监听端口")
     parser.add_argument(
         "--reload", action="store_true", help="启用自动重载（开发模式）"
     )

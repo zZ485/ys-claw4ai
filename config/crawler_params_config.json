@@ -16,8 +16,12 @@
           "max_crawlers": 6
         },
         {
-          "max_urls": 999999,
+          "max_urls": 5000,
           "max_crawlers": 8
+        },
+        {
+          "max_urls": 999999,
+          "max_crawlers": 4
         }
       ]
     },
@@ -36,8 +40,12 @@
           "batch_size": 20
         },
         {
+          "max_urls": 5000,
+          "batch_size": 30
+        },
+        {
           "max_urls": 999999,
-          "batch_size": 50
+          "batch_size": 20
         }
       ]
     },
@@ -52,8 +60,12 @@
           "flush_interval": 30
         },
         {
+          "max_urls": 5000,
+          "flush_interval": 20
+        },
+        {
           "max_urls": 999999,
-          "flush_interval": 15
+          "flush_interval": 10
         }
       ]
     },
@@ -66,6 +78,10 @@
       "max_retry_attempts": 3,
       "retry_delay_seconds": 1.0,
       "log_success_threshold": 100
+    },
+    "memory_settings": {
+      "memory_optimization_threshold": 1000,
+      "max_buffer_size_ratio": 0.1
     }
   }
 }

@@ -7,7 +7,11 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # 导入增量爬取辅助模块
-from utils.incremental_crawler import filter_links_for_crawl, prepare_links_result
+from utils.incremental_crawler import (
+    filter_links_for_crawl,
+    prepare_links_result,
+    get_latest_link_from_db,
+)
 import asyncio
 import argparse
 import aiohttp
@@ -224,13 +228,24 @@ def extract_news_img_links(html_content):
     return links
 
 
-async def fetch_all_links(max_pages=5, use_proxy=False, proxy_list=None):
+async def fetch_all_links(
+    max_pages=5, use_proxy=False, proxy_list=None, is_incremental=False
+):
     """
     获取多页链接，返回完整URL列表
     增强反爬虫能力：支持代理、随机延时、请求头轮换、FECU令牌自动更新
     """
     all_links = []
     page_count = 0
+
+    # 如果是增量模式，先获取最新链接
+    latest_link = None
+    if is_incremental:
+        latest_link = await get_latest_link_from_db()
+        if latest_link:
+            print(f"增量模式：最新链接为 {latest_link}")
+        else:
+            print("增量模式：未找到最新链接，将爬取所有链接")
 
     # 准备代理列表
     proxies = []
@@ -252,8 +267,9 @@ async def fetch_all_links(max_pages=5, use_proxy=False, proxy_list=None):
         # 记录尝试获取FECU令牌的次数
         fecu_retry_count = 0
         max_fecu_retries = 3
+        should_continue = True
 
-        while page_count < max_pages:
+        while page_count < max_pages and should_continue:
             page_num = page_count + 1
             print(f"正在获取第 {page_num} 页")
 
@@ -297,22 +313,58 @@ async def fetch_all_links(max_pages=5, use_proxy=False, proxy_list=None):
                 # 重置FECU重试计数器
                 fecu_retry_count = 0
 
+                # 检查是否为最后一页
+                is_end = data.get("data", {}).get("is_end", 0)
+                exists_item_count = data.get("data", {}).get("exists_item_count", 0)
+                quick_news_date = data.get("data", {}).get("quick_news_date", "")
+
+                print(
+                    f"日期: {quick_news_date}, 存在项目数: {exists_item_count}, 是否最后一页: {'是' if is_end else '否'}"
+                )
+
                 # 从JSON数据中获取HTML内容
                 html_content = data.get("data", {}).get("html", "")
 
                 if html_content:
                     # 提取链接
                     page_links = extract_news_img_links(html_content)
+
+                    # 将当前页的链接与已存在的链接合并并去重
+                    previous_count = len(all_links)
                     all_links.extend(page_links)
+                    # 去重并按ID降序排序
+                    unique_links = list(set(all_links))
+                    unique_links.sort(
+                        key=lambda x: x.split("/")[-1].split(".")[0], reverse=True
+                    )
+                    all_links = unique_links
 
                     print(f"本页提取到 {len(page_links)} 个链接")
+
+                    # 增量模式：检查最新链接是否在当前页面中
+                    if is_incremental and latest_link:
+                        if latest_link in page_links:
+                            print(f"第 {page_num} 页包含最新链接，停止爬取")
+                            # 获取最新链接之前的所有链接
+                            index = all_links.index(latest_link)
+                            all_links = all_links[:index]
+                            should_continue = False
+                    elif len(all_links) == previous_count:
+                        # 如果去重后链接数量没有增加，说明该页的链接都已存在，停止爬取
+                        print(f"第 {page_num} 页的所有链接都已存在，停止爬取")
+                        should_continue = False
+
+                # 全量模式：如果is_end为1，表示已经到达最后一页
+                elif not is_incremental and is_end == 1:
+                    print(f"已到达最后一页（第 {page_num} 页），停止爬取")
+                    should_continue = False
             elif data:
                 print(f"获取数据失败，响应代码: {data.get('code')}")
 
             page_count += 1
 
             # 随机延时，避免请求过于规律
-            if page_count < max_pages:
+            if page_count < max_pages and should_continue:
                 await random_delay()
 
     print(f"共获取 {len(all_links)} 条链接")
@@ -358,9 +410,12 @@ async def get_links(
             print("警告：未配置有效代理，将不使用代理")
             use_proxy = False
 
-    # 获取所有URL
+    # 获取所有URL，传递增量模式参数
     all_links = await fetch_all_links(
-        max_pages=max_pages, use_proxy=use_proxy, proxy_list=proxy_list
+        max_pages=max_pages,
+        use_proxy=use_proxy,
+        proxy_list=proxy_list,
+        is_incremental=is_incremental,
     )
 
     # 去重（虽然理论上不会有重复，但确保数据的唯一性）
@@ -369,28 +424,38 @@ async def get_links(
     # 排序（按时间顺序，降序，即最新文章在前面）链接示例：1. https://www.ebrun.com/businessnews/20251210/630171.shtml 2. https://www.ebrun.com/businessnews/20251215/630462.shtml
     # unique_links.sort(key=lambda x: x.split('/')[-1].split('.')[0])
     unique_links.sort(key=lambda x: x.split("/")[-1].split(".")[0], reverse=True)
-    # 使用增量爬取辅助模块过滤链接
-    filtered_links = await filter_links_for_crawl(unique_links, is_incremental)
 
     # 返回符合任务管理器期望的格式
-    return prepare_links_result(filtered_links, is_incremental)
+    return prepare_links_result(unique_links, is_incremental)
 
 
 async def main():
     """命令行运行时的主函数，打印结果到控制台"""
+    # 创建命令行参数解析器
+    parser = argparse.ArgumentParser(description="获取链接")
+    parser.add_argument(
+        "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
+    )
+
+    # 解析命令行参数
+    args = parser.parse_args()
+
     # 配置选项
     use_proxy = False  # 是否使用代理
     max_pages = 2  # 最大页数
 
     print("=== 亿邦动力网商业趋势文章爬虫 ===")
+    mode = "增量模式" if args.incremental else "全量模式"
+    print(f"爬取模式: {mode}")
     print(f"最大页面数: {max_pages}")
     print(f"使用代理: {'是' if use_proxy else '否'}")
     print("开始爬取...")
 
-    result = await get_links(use_proxy=use_proxy, max_pages=max_pages)
+    result = await get_links(
+        use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental
+    )
 
     # 打印结果
-    mode = "增量模式" if result.get("is_incremental") else "全量模式"
     print(f"{mode}：总共获取到 {result['count']} 个链接:")
     for i, link in enumerate(result["links"], 1):
         print(f"{i}. {link}")

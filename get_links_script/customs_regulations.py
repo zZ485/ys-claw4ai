@@ -37,12 +37,13 @@ def extract_links(content):
     return links
 
 
-async def get_links(is_incremental=False):
+async def get_links(is_incremental=False, max_pages=5):
     """
     获取海关总署法规链接
 
     Args:
         is_incremental: 是否增量模式，默认为False（全量模式）
+        max_pages: 最大爬取页数，默认为5页
 
     Returns:
         dict: 包含链接数量和链接列表的字典
@@ -50,7 +51,7 @@ async def get_links(is_incremental=False):
     all_links = []
 
     # 爬取海关总署法规页面
-    await crawl_page(all_links)
+    await crawl_page(all_links, max_pages)
 
     # 去重并排序链接
     unique_links = list(set(all_links))
@@ -72,9 +73,13 @@ async def get_links(is_incremental=False):
     return prepare_links_result(filtered_links, is_incremental)
 
 
-async def crawl_page(all_links: list):
-    url = "http://www.customs.gov.cn/customs/302249/302266/08654b53-1.html"
+async def crawl_page(all_links: list, max_pages=5):
+    """爬取多个页面的法规链接
 
+    Args:
+        all_links: 存储所有链接的列表
+        max_pages: 最大爬取页数，默认为5页
+    """
     browser_config = BrowserConfig(
         headless=True, verbose=False, text_mode=True, user_agent_mode="random"
     )
@@ -92,25 +97,34 @@ async def crawl_page(all_links: list):
         # target_elements=[".easysite-news-title", ".easysite-news-text"]
     )
 
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        result = await crawler.arun(
-            url=url,
-            config=run_config,
-        )
-        if result.success:
-            # # 复制到剪贴板
-            # try:
-            #     pyperclip.copy(result.markdown)
-            #     print("\n内容已成功复制到剪贴板！")
-            # except Exception as e:
-            #     print(f"\n复制到剪贴板失败: {e}")
-            #     print("请安装 pyperclip 库: pip install pyperclip")
+    total_links = 0
 
-            links = extract_links(result.markdown.fit_markdown)
-            all_links.extend(links)
-            print(f"提取到 {len(links)} 个链接")
-        else:
-            print("页面爬取失败")
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        for page_num in range(1, max_pages + 1):
+            url = f"http://www.customs.gov.cn/customs/302249/302266/08654b53-{page_num}.html"
+            print(f"正在爬取第 {page_num} 页: {url}")
+
+            result = await crawler.arun(
+                url=url,
+                config=run_config,
+            )
+            if result.success:
+                # # 复制到剪贴板
+                # try:
+                #     pyperclip.copy(result.markdown)
+                #     print("\n内容已成功复制到剪贴板！")
+                # except Exception as e:
+                #     print(f"\n复制到剪贴板失败: {e}")
+                #     print("请安装 pyperclip 库: pip install pyperclip")
+
+                links = extract_links(result.markdown.fit_markdown)
+                all_links.extend(links)
+                total_links += len(links)
+                print(f"第 {page_num} 页提取到 {len(links)} 个链接")
+            else:
+                print(f"第 {page_num} 页爬取失败")
+
+    print(f"总共提取到 {total_links} 个链接")
 
 
 async def main():
@@ -122,16 +136,17 @@ async def main():
     parser.add_argument(
         "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
     )
+    parser.add_argument("--pages", type=int, default=5, help="爬取的页数，默认为5页")
 
     # 解析命令行参数
     args = parser.parse_args()
 
     # 调用get_links函数
-    result = await get_links(is_incremental=args.incremental)
+    result = await get_links(is_incremental=args.incremental, max_pages=args.pages)
 
     # 打印结果
     mode = "增量模式" if result.get("is_incremental") else "全量模式"
-    print(f"\n{mode}：总共获取到 {result['count']} 个链接:")
+    print(f"\n{mode}（{args.pages}页）：总共获取到 {result['count']} 个链接:")
     for i, link in enumerate(result["links"], 1):
         print(f"{i}. {link}")
 
