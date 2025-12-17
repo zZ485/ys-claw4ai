@@ -10,7 +10,7 @@ from config.logger_config import LoggerConfig
 from config.path_config import default_path_config
 from config.crawler_params_config import crawler_params_config
 from utils.batch_writer import batch_writer_manager
-from utils.memory_monitor import memory_monitor
+
 
 # 获取日志记录器
 logger = LoggerConfig.get_logger(__name__)
@@ -93,6 +93,7 @@ async def crawl_urls(
     flush_interval=30,
     progress_callback=None,
     memory_optimization_threshold=1000,
+    cleaning_config=None,
 ):
     """批量爬取URL列表，使用arun_many提升并发效率，每个爬虫实例处理8条链接
 
@@ -104,6 +105,7 @@ async def crawl_urls(
         flush_interval: 刷新间隔(秒)，默认30秒
         progress_callback: 可选，进度回调函数，接收(completed, total)参数
         memory_optimization_threshold: 内存优化阈值，超过此数量的URL将不保存全部数据到内存
+        cleaning_config: 清洗配置，格式为 {"source": 0/1, "image_source": 0/1, "author": 0/1}
 
     Returns:
         dict: 包含爬取结果的字典，大规模爬取时crawled_data为None以节省内存
@@ -116,14 +118,6 @@ async def crawl_urls(
         f"开始批量爬取，共 {len(urls)} 个URL，批量写入大小: {batch_size}, 刷新间隔: {flush_interval}秒"
     )
     start_time = datetime.now()
-
-    # 记录初始内存使用情况（仅在内存使用率高时记录）
-    memory_monitor.log_memory_usage(f"爬取开始，URL数量: {len(urls)}", "warning")
-
-    # 获取内存优化建议
-    memory_recommendations = memory_monitor.get_memory_recommendations(len(urls))
-    if memory_recommendations.get("enable_memory_optimization", False):
-        logger.info(f"已启用内存优化模式: {memory_recommendations}")
 
     run_config = await build_crawler_config(target_elements)
     logger.info(f"爬虫配置已构建: target_elements={target_elements}")
@@ -138,6 +132,7 @@ async def crawl_urls(
             batch_size=batch_size,
             flush_interval=flush_interval,
             max_buffer_size=max_buffer_size,
+            cleaning_config=cleaning_config,  # 传递清洗配置
         )
         logger.info(
             f"批量写入器已初始化，批量大小: {batch_size}, 刷新间隔: {flush_interval}秒, 最大缓冲区: {max_buffer_size}条"
@@ -289,37 +284,8 @@ async def crawl_urls(
         task = asyncio.create_task(process_chunk(chunk, i))
         tasks.append(task)
 
-    # 定期检查内存使用情况
-    async def monitor_memory_during_crawl():
-        """在爬取过程中定期监控内存使用情况"""
-        chunk_count = len(url_chunks)
-        check_interval = max(1, chunk_count // 10)  # 每处理约10%的块检查一次
-
-        for i in range(0, chunk_count, check_interval):
-            await asyncio.sleep(0)  # 让出控制权
-
-            # 检查内存使用是否超过阈值
-            if memory_monitor.check_memory_threshold(80.0):
-                logger.warning(f"内存使用率过高，已处理 {i}/{chunk_count} 组URL")
-
-            # 记录内存使用情况（仅在内存使用率高时记录）
-            if i % (check_interval * 2) == 0 or i >= chunk_count - 1:
-                memory_monitor.log_memory_usage(
-                    f"爬取进度: {i}/{chunk_count}", "warning"
-                )
-
-    # 启动内存监控任务
-    memory_task = asyncio.create_task(monitor_memory_during_crawl())
-
     # 等待所有任务完成，处理可能的异常
     await asyncio.gather(*tasks, return_exceptions=True)
-
-    # 取消内存监控任务
-    memory_task.cancel()
-    try:
-        await memory_task
-    except asyncio.CancelledError:
-        pass
 
     # 刷新批量写入器中剩余的数据
     if batch_writer:
@@ -327,11 +293,6 @@ async def crawl_urls(
 
     end_time = datetime.now()
     total_duration = (end_time - start_time).total_seconds()
-
-    # 记录完成时的内存使用情况（仅在内存使用率高时记录）
-    memory_monitor.log_memory_usage(
-        f"爬取完成，总耗时: {total_duration:.2f}秒", "warning"
-    )
 
     logger.info(
         f"批量爬取完成: 总耗时 {total_duration:.2f}秒, 成功 {crawled_count} 个, 失败 {len(errors)} 个"

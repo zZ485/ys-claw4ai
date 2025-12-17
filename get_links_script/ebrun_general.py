@@ -41,7 +41,7 @@ def extract_links(content):
     return links
 
 
-async def get_links(is_incremental=False):
+async def get_links(max_pages=None, is_incremental=False):
     all_links = []
     page_num = 1
     should_continue = True
@@ -55,7 +55,7 @@ async def get_links(is_incremental=False):
         else:
             print("增量模式：未找到最新链接，将爬取所有链接")
 
-    while should_continue:
+    while should_continue and (max_pages is None or page_num <= max_pages):
         print(f"正在爬取第 {page_num} 页...")
         page_links = []
         await crawl_page(page_num, page_links)
@@ -148,12 +148,26 @@ async def main():
     parser.add_argument(
         "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
     )
+    parser.add_argument(
+        "--max-pages", type=int, help="限制最大爬取页数（可选，不指定则获取所有页面）"
+    )
 
     # 解析命令行参数
     args = parser.parse_args()
 
+    print("=== 亿邦动力网文章爬虫 ===")
+    mode = "增量模式" if args.incremental else "全量模式"
+    print(f"爬取模式: {mode}")
+
+    if args.max_pages:
+        print(f"最大页面数限制: {args.max_pages}")
+        print("开始爬取...")
+    else:
+        print("开始爬取...")
+        print("注意: 爬取将获取所有可用页面，直到遇到空页面")
+
     # 调用get_links函数
-    result = await get_links(is_incremental=args.incremental)
+    result = await get_links(max_pages=args.max_pages, is_incremental=args.incremental)
 
     # 打印结果
     mode = "增量模式" if result.get("is_incremental") else "全量模式"

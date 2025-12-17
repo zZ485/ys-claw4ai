@@ -78,7 +78,11 @@ class CollectRequest(BaseModel):
     task_name: str  # 任务名称
     is_incremental: int = 0  # 是否增量，1表示增量采集，0表示全量采集
     knowledge_base_name: str  # 知识库名称
-    enable_cleaning: int = 1  # 是否开启清洗，1开启，0不开启，默认开启
+    cleaning_config: dict = {
+        "source": 1,  # 0表示关闭，1表示开启
+        "image_source": 1,  # 0表示关闭，1表示开启
+        "author": 1,  # 0表示关闭，1表示开启
+    }  # 清洗配置，默认全部开启
 
 
 # class ScriptRequest(BaseModel):
@@ -99,7 +103,9 @@ class TaskListRequest(BaseModel):
     # 模糊匹配条件
     task_id: Optional[str] = None  # 任务编号（模糊匹配）
     task_name: Optional[str] = None  # 任务名称（模糊匹配）
-    complete_time: Optional[str] = None  # 完成时间（模糊匹配）
+    # 时间段查询条件
+    start_time: Optional[str] = None  # 开始时间（格式：YYYY-MM-DD）
+    end_time: Optional[str] = None  # 结束时间（格式：YYYY-MM-DD）
     # 等值匹配条件
     collection_template: Optional[str] = None  # 采集模板（等值匹配）
     task_type: Optional[int] = None  # 任务类型（0-全量，1-增量）（等值匹配）
@@ -270,7 +276,7 @@ async def collect_data(request: CollectRequest):
             is_incremental=request.is_incremental,
             db_config=db_config,
             knowledge_base_name=request.knowledge_base_name,
-            enable_cleaning=request.enable_cleaning,
+            cleaning_config=request.cleaning_config,
         )
 
         logger.info(
@@ -287,7 +293,7 @@ async def collect_data(request: CollectRequest):
                 "task_name": request.task_name,
                 "is_incremental": request.is_incremental,
                 "knowledge_base_name": request.knowledge_base_name,
-                "enable_cleaning": request.enable_cleaning,
+                "cleaning_config": request.cleaning_config,
                 "file_name": task_id,  # 返回实际使用的文件名（task_id）
             },
         )
@@ -417,8 +423,12 @@ async def get_tasks_with_pagination(request: TaskListRequest):
             query_conditions["task_id_like"] = request.task_id
         if request.task_name:
             query_conditions["task_name_like"] = request.task_name
-        if request.complete_time:
-            query_conditions["complete_time_like"] = request.complete_time
+
+        # 时间段查询条件
+        if request.start_time:
+            query_conditions["start_time"] = request.start_time
+        if request.end_time:
+            query_conditions["end_time"] = request.end_time
 
         # 等值匹配条件
         if request.collection_template:

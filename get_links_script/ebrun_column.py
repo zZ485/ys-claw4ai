@@ -227,11 +227,17 @@ def extract_news_img_links(html_content):
 
 
 async def fetch_all_links(
-    max_pages=5, use_proxy=False, proxy_list=None, is_incremental=False
+    use_proxy=False, proxy_list=None, max_pages=None, is_incremental=False
 ):
     """
-    获取多页链接，返回完整URL列表
+    获取所有页面链接，返回完整URL列表
     增强反爬虫能力：支持代理、随机延时、请求头轮换、FECU令牌自动更新
+
+    参数:
+        use_proxy: 是否使用代理
+        proxy_list: 代理IP列表
+        max_pages: 最大爬取页数，默认为None表示不限制，获取所有页面
+        is_incremental: 是否启用增量模式
     """
     all_links = []
     page_count = 0
@@ -267,7 +273,7 @@ async def fetch_all_links(
         max_fecu_retries = 3
         should_continue = True
 
-        while page_count < max_pages and should_continue:
+        while should_continue and (max_pages is None or page_count < max_pages):
             page_num = page_count + 1
             print(f"正在获取第 {page_num} 页")
 
@@ -362,7 +368,7 @@ async def fetch_all_links(
             page_count += 1
 
             # 随机延时，避免请求过于规律
-            if page_count < max_pages and should_continue:
+            if should_continue and (max_pages is None or page_count < max_pages):
                 await random_delay()
 
     print(f"共获取 {len(all_links)} 条链接")
@@ -382,15 +388,16 @@ def get_proxy_list():
 
 
 async def get_links(
-    use_proxy=False, proxy_list=None, max_pages=2, is_incremental=False
+    use_proxy=False, proxy_list=None, max_pages=None, is_incremental=False
 ):
     """
-    获取亿邦动力网商业趋势文章URL列表，可供外部调用
+    获取亿邦动力网专栏文章URL列表，可供外部调用
 
     参数:
         use_proxy: 是否使用代理，默认为False
         proxy_list: 代理IP列表，格式为["http://ip:port", "http://ip2:port2", ...]
-        max_pages: 最大爬取页数，默认为2
+        max_pages: 最大爬取页数，默认为None表示不限制，获取所有页面
+        is_incremental: 是否启用增量模式，默认为False
 
     返回:
         dict: 包含links键的字典，符合任务管理器期望的格式
@@ -410,9 +417,9 @@ async def get_links(
 
     # 获取所有URL，传递增量模式参数
     all_links = await fetch_all_links(
-        max_pages=max_pages,
         use_proxy=use_proxy,
         proxy_list=proxy_list,
+        max_pages=max_pages,
         is_incremental=is_incremental,
     )
 
@@ -432,23 +439,30 @@ async def main():
     parser.add_argument(
         "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
     )
+    parser.add_argument(
+        "--max-pages", type=int, help="限制最大爬取页数（可选，不指定则获取所有页面）"
+    )
 
     # 解析命令行参数
     args = parser.parse_args()
 
     # 配置选项
     use_proxy = False  # 是否使用代理
-    max_pages = 2  # 最大页数
 
-    print("=== 亿邦动力网商业趋势文章爬虫 ===")
+    print("=== 亿邦动力网专栏文章爬虫 ===")
     mode = "增量模式" if args.incremental else "全量模式"
     print(f"爬取模式: {mode}")
-    print(f"最大页面数: {max_pages}")
     print(f"使用代理: {'是' if use_proxy else '否'}")
-    print("开始爬取...")
+
+    if args.max_pages:
+        print(f"最大页面数限制: {args.max_pages}")
+        print("开始爬取...")
+    else:
+        print("开始爬取...")
+        print("注意: 爬取将获取所有可用页面，直到到达最后一页")
 
     result = await get_links(
-        use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental
+        use_proxy=use_proxy, max_pages=args.max_pages, is_incremental=args.incremental
     )
 
     # 打印结果

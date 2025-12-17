@@ -521,7 +521,8 @@ class DatabaseManager:
             page: 页码，从1开始
             page_size: 每页大小，默认10条
             query_conditions: 查询条件字典
-                - 模糊匹配字段: task_id_like, task_name_like, complete_time_like
+                - 模糊匹配字段: task_id_like, task_name_like
+                - 时间段查询字段: start_time, end_time (格式: YYYY-MM-DD)
                 - 等值匹配字段: collection_template, task_type, task_status, knowledge_base_name
 
         Returns:
@@ -557,11 +558,18 @@ class DatabaseManager:
                 params.append(f"%{query_conditions['task_name_like']}%")
                 count_params.append(f"%{query_conditions['task_name_like']}%")
 
-            if query_conditions.get("complete_time_like"):
-                where_conditions.append("complete_time LIKE ?")
-                count_where_conditions.append("complete_time LIKE ?")
-                params.append(f"%{query_conditions['complete_time_like']}%")
-                count_params.append(f"%{query_conditions['complete_time_like']}%")
+            # 处理时间段查询条件
+            if query_conditions.get("start_time"):
+                where_conditions.append("complete_time >= ?")
+                count_where_conditions.append("complete_time >= ?")
+                params.append(query_conditions["start_time"])
+                count_params.append(query_conditions["start_time"])
+
+            if query_conditions.get("end_time"):
+                where_conditions.append("complete_time <= ?")
+                count_where_conditions.append("complete_time <= ?")
+                params.append(query_conditions["end_time"])
+                count_params.append(query_conditions["end_time"])
 
             # 处理等值匹配条件
             if query_conditions.get("collection_template"):

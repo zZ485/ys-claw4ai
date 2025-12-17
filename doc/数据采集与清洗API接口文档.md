@@ -74,7 +74,11 @@
   "task_name": "采集上海跨境电商新闻",
   "is_incremental": 0,
   "knowledge_base_name": "ecommerce_news",
-  "enable_cleaning": 1
+  "cleaning_config": {
+    "source": 1,
+    "image_source": 1,
+    "author": 1
+  }
 }
 ```
 
@@ -83,7 +87,10 @@
 - `task_name`: 任务名称
 - `is_incremental`: 是否增量采集，1表示增量采集，0表示全量采集，默认为0
 - `knowledge_base_name`: 知识库名称
-- `enable_cleaning`: 是否开启数据清洗，1开启，0不开启，默认为1
+- `cleaning_config`: 清洗配置，JSON对象，包含以下字段：
+  - `source`: 是否清洗来源信息，0表示不清洗，1表示清洗，默认为1
+  - `image_source`: 是否清洗图源信息，0表示不清洗，1表示清洗，默认为1
+  - `author`: 是否清洗作者信息，0表示不清洗，1表示清洗，默认为1
 
 ### 响应示例
 ```json
@@ -96,7 +103,11 @@
     "task_name": "采集上海跨境电商新闻",
     "is_incremental": 0,
     "knowledge_base_name": "ecommerce_news",
-    "enable_cleaning": 1,
+    "cleaning_config": {
+      "source": 1,
+      "image_source": 1,
+      "author": 1
+    },
     "file_name": "task_20231216_001"
   }
 }
@@ -108,7 +119,7 @@
 - `task_name`: 任务名称
 - `is_incremental`: 是否增量采集
 - `knowledge_base_name`: 知识库名称
-- `enable_cleaning`: 是否开启数据清洗
+- `cleaning_config`: 清洗配置，包含source、image_source和author字段
 - `file_name`: 结果文件名，与task_id相同
 
 ---
@@ -161,7 +172,8 @@
   "page_size": 10,
   "task_id": "task_202312",
   "task_name": "采集",
-  "complete_time": "2023-12-16",
+  "start_time": "2023-12-01",
+  "end_time": "2023-12-31",
   "collection_template": "shanghai_cross_border_association_news",
   "task_type": 0,
   "task_status": "completed",
@@ -177,7 +189,10 @@
 **模糊匹配条件**:
 - `task_id`: 任务编号（模糊匹配）
 - `task_name`: 任务名称（模糊匹配）
-- `complete_time`: 完成时间（模糊匹配）
+
+**时间段查询条件**:
+- `start_time`: 开始时间（格式：YYYY-MM-DD），查询完成时间大于等于此时间的任务
+- `end_time`: 结束时间（格式：YYYY-MM-DD），查询完成时间小于等于此时间的任务
 
 **等值匹配条件**:
 - `collection_template`: 采集模板（等值匹配）
@@ -234,6 +249,94 @@
 
 ---
 
+## 时间段查询说明
+
+`start_time` 和 `end_time` 参数允许您查询在特定时间范围内完成的所有任务。
+
+### 查询规则
+- 当只提供 `start_time` 时：查询完成时间大于等于该时间的所有任务
+- 当只提供 `end_time` 时：查询完成时间小于等于该时间的所有任务
+- 当同时提供 `start_time` 和 `end_time` 时：查询完成时间在此范围内的所有任务
+
+### 时间格式
+- 必须采用 `YYYY-MM-DD` 格式，例如：`2023-12-31`
+- 时间范围为当天的 00:00:00 至 23:59:59
+
+### 查询示例
+
+**查询2023年12月完成的任务：**
+```json
+{
+  "start_time": "2023-12-01",
+  "end_time": "2023-12-31"
+}
+```
+
+**查询2023年12月15日之后完成的任务：**
+```json
+{
+  "start_time": "2023-12-15"
+}
+```
+
+**查询2023年12月15日之前完成的任务：**
+```json
+{
+  "end_time": "2023-12-15"
+}
+```
+
+---
+
+## 清洗配置详解
+
+清洗配置允许用户精确控制需要从采集的内容中移除哪些信息。系统支持以下三种类型的清洗：
+
+### 清洗类型说明
+
+1. **来源信息 (source)**
+   - 清除模式：文章来源、来源：、本文来自：等来源相关信息
+   - 示例文本："文章来源：新华财经"、"来源：上海海关12360热线"
+   
+2. **图源信息 (image_source)**
+   - 清除模式：图源：、图片来源：、图片来自：等图片来源信息
+   - 示例文本："图源：微盟智慧零售公众号"
+   
+3. **作者信息 (author)**
+   - 清除模式：作者：、文/、撰文：、记者等作者信息
+   - 示例文本："作者：陈嘉莹"
+
+### 配置示例
+
+**全部开启清洗（默认）**:
+```json
+{
+  "source": 1,
+  "image_source": 1,
+  "author": 1
+}
+```
+
+**只清洗来源信息**:
+```json
+{
+  "source": 1,
+  "image_source": 0,
+  "author": 0
+}
+```
+
+**不清洗任何内容**:
+```json
+{
+  "source": 0,
+  "image_source": 0,
+  "author": 0
+}
+```
+
+---
+
 ## 错误码说明
 
 | 错误码 | 说明 |
@@ -263,7 +366,11 @@ curl -X POST "http://127.0.0.1:8000/collect" \
        "task_name": "采集上海跨境电商新闻",
        "is_incremental": 0,
        "knowledge_base_name": "ecommerce_news",
-       "enable_cleaning": 1
+       "cleaning_config": {
+         "source": 1,
+         "image_source": 1,
+         "author": 1
+       }
      }'
 ```
 
@@ -274,7 +381,9 @@ curl -X POST "http://127.0.0.1:8000/tasks" \
      -d '{
        "page": 1,
        "page_size": 10,
-       "task_status": "completed"
+       "task_status": "completed",
+       "start_time": "2023-12-01",
+       "end_time": "2023-12-31"
      }'
 ```
 

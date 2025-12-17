@@ -196,11 +196,9 @@ async def fetch_posts_page(session, after_cursor=None, proxy=None, max_retries=3
     return None
 
 
-async def fetch_all_posts_urls(
-    max_pages=5, use_proxy=False, proxy_list=None, is_incremental=False
-):
+async def fetch_all_posts_urls(use_proxy=False, proxy_list=None, is_incremental=False):
     """
-    获取多页专栏文章，返回完整URL列表
+    获取所有专栏文章，返回完整URL列表
     增强反爬虫能力：支持代理、随机延时、请求头轮换
     """
     all_urls = []
@@ -228,7 +226,7 @@ async def fetch_all_posts_urls(
 
     async with aiohttp.ClientSession(connector=connector) as session:
         should_continue = True
-        while page_count < max_pages and should_continue:
+        while should_continue:
             print(f"正在获取第 {page_count + 1} 页")
 
             # 随机选择代理（如果启用）
@@ -296,16 +294,13 @@ def get_proxy_list():
     ]
 
 
-async def get_links(
-    use_proxy=False, proxy_list=None, max_pages=2, is_incremental=False
-):
+async def get_links(use_proxy=False, proxy_list=None, is_incremental=False):
     """
     获取商电报专栏文章URL列表，可供外部调用
 
     参数:
         use_proxy: 是否使用代理，默认为False
         proxy_list: 代理IP列表，格式为["http://ip:port", "http://ip2:port2", ...]
-        max_pages: 最大爬取页数，默认为5
 
     返回:
         dict: 包含count和links的字典
@@ -323,7 +318,6 @@ async def get_links(
 
     # 获取所有URL，传递增量模式参数
     all_urls = await fetch_all_posts_urls(
-        max_pages=max_pages,
         use_proxy=use_proxy,
         proxy_list=proxy_list,
         is_incremental=is_incremental,
@@ -346,37 +340,14 @@ async def main():
 
     # 配置选项
     use_proxy = False  # 是否使用代理
-    max_pages = 2  # 最大页数
 
-    print("=== 商电报专栏文章爬虫 ===")
-    mode = "增量模式" if args.incremental else "全量模式"
-    print(f"爬取模式: {mode}")
-    print(f"最大页面数: {max_pages}")
-    print(f"使用代理: {'是' if use_proxy else '否'}")
-    print("开始爬取...")
-
-    print("=== 商电报专栏文章爬虫 ===")
-    print(f"最大页面数: {max_pages}")
-    print(f"使用代理: {'是' if use_proxy else '否'}")
-    print("开始爬取...")
-
-    result = await get_links(
-        use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental
-    )
+    result = await get_links(use_proxy=use_proxy, is_incremental=args.incremental)
 
     # 打印结果
     mode = "增量模式" if args.incremental else "全量模式"
     print(f"{mode}：总共获取到 {result['count']} 个链接:")
     for i, link in enumerate(result["links"], 1):
         print(f"{i}. {link}")
-
-    # 可选：将结果保存到文件
-    save_to_file = input("\n是否将结果保存到文件? (y/n): ").lower() == "y"
-    if save_to_file:
-        filename = f"dianshangbao_retail_links_{int(time.time())}.txt"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write("\n".join(result["links"]))
-        print(f"结果已保存到 {filename}")
 
 
 if __name__ == "__main__":

@@ -38,14 +38,19 @@ class Task:
         task_name: str,
         is_incremental: int,
         knowledge_base_name: str = "",
-        enable_cleaning: int = 1,  # 是否开启清洗，1开启，0不开启，默认开启
+        cleaning_config: dict = {
+            "source": 1,  # 0表示关闭，1表示开启
+            "image_source": 1,  # 0表示关闭，1表示开启
+            "author": 1,  # 0表示关闭，1表示开启
+        },  # 清洗配置，默认全部开启
     ):
         self.task_id = task_id
         self.collection_template = collection_template  # 采集模板名称
         self.task_name = task_name
         self.is_incremental = is_incremental  # 0-全量采集, 1-增量采集
         self.knowledge_base_name = knowledge_base_name
-        self.enable_cleaning = enable_cleaning  # 0-不开启清洗，1-开启清洗
+        self.cleaning_config = cleaning_config  # 清洗配置
+        self.enable_cleaning = 1  # 保留此字段以兼容已有代码，始终为1表示开启清洗
         self.file_name = task_id  # 保持原有逻辑：file_name 使用 task_id
         self.batch_size: int = 10  # 将根据链接数量动态调整
         self.flush_interval: int = 30  # 将根据链接数量动态调整
@@ -69,7 +74,8 @@ class Task:
             "task_type": self.is_incremental,  # 0-全量, 1-增量
             "is_incremental": self.is_incremental,  # 保留原始字段，确保兼容性
             "knowledge_base_name": self.knowledge_base_name,
-            "enable_cleaning": self.enable_cleaning,  # 是否开启清洗
+            "enable_cleaning": self.enable_cleaning,  # 是否开启清洗（保留字段以兼容）
+            "cleaning_config": self.cleaning_config,  # 清洗配置
             "task_status": status_value,
             "failure_reason": self.failure_reason,
             "create_time": self.created_at,
@@ -125,7 +131,11 @@ class TaskManager:
         task_name: str,
         is_incremental: int,
         knowledge_base_name: str = "",
-        enable_cleaning: int = 1,  # 是否开启清洗，1开启，0不开启，默认开启
+        cleaning_config: dict = {
+            "source": 1,  # 0表示关闭，1表示开启
+            "image_source": 1,  # 0表示关闭，1表示开启
+            "author": 1,  # 0表示关闭，1表示开启
+        },  # 清洗配置，默认全部开启
         db_config: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
@@ -136,7 +146,7 @@ class TaskManager:
             task_name: 任务名称
             is_incremental: 任务类型，1表示增量采集，0表示全量采集
             knowledge_base_name: 知识库名称
-            enable_cleaning: 是否开启清洗，1开启，0不开启，默认开启
+            cleaning_config: 清洗配置，格式为 {"source": 0/1, "image_source": 0/1, "author": 0/1}
             db_config: 数据库配置信息（可选，如果提供则初始化数据库连接）
 
         Returns:
@@ -177,7 +187,7 @@ class TaskManager:
             task_name=task_name,
             is_incremental=is_incremental,
             knowledge_base_name=knowledge_base_name,
-            enable_cleaning=enable_cleaning,
+            cleaning_config=cleaning_config,
         )
         self.tasks[task_id] = task
 
@@ -410,6 +420,7 @@ class TaskManager:
                 flush_interval=task.flush_interval,
                 progress_callback=progress_callback,
                 memory_optimization_threshold=memory_optimization_threshold,  # 使用配置中的内存优化阈值
+                cleaning_config=task.cleaning_config,  # 传递清洗配置
             )
 
             # 更新任务结果

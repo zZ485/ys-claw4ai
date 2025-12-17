@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 from config.logger_config import LoggerConfig
 from config.path_config import default_path_config
+from utils.content_cleaner import create_cleaner_from_config
 
 # 获取日志记录器
 logger = LoggerConfig.get_logger(__name__)
@@ -21,6 +22,7 @@ class BatchWriter:
         batch_size: int = 10,
         flush_interval: int = 30,
         max_buffer_size: int = 200,
+        cleaning_config: Optional[Dict[str, Any]] = None,
     ):
         """
         初始化批量写入器
@@ -30,11 +32,14 @@ class BatchWriter:
             batch_size: 达到此数量时自动写入文件，默认10条
             flush_interval: 达到此时间间隔(秒)时自动写入文件，默认30秒
             max_buffer_size: 缓冲区最大大小，超过此值强制刷新，默认200条
+            cleaning_config: 清洗配置，格式为 {"source": 0/1, "image_source": 0/1, "author": 0/1}
         """
         self.file_name = file_name
         self.batch_size = batch_size
         self.flush_interval = flush_interval
         self.max_buffer_size = max_buffer_size
+        self.cleaning_config = cleaning_config
+        self.content_cleaner = create_cleaner_from_config(cleaning_config)
         self.buffer: List[Dict[str, Any]] = []
         self._lock = asyncio.Lock()
         self._last_flush_time = datetime.now()
@@ -103,6 +108,9 @@ class BatchWriter:
         for item in items:
             content = item["content"].strip()
             if len(content) > 50:
+                # 使用清洗器清洗内容
+                if self.content_cleaner:
+                    content = self.content_cleaner.clean_content(content)
                 filtered_items.append({"url": item["url"], "content": content})
 
         # 使用aiofiles异步写入文件（追加模式）
@@ -184,6 +192,7 @@ class BatchWriterManager:
         batch_size: int = 10,
         flush_interval: int = 30,
         max_buffer_size: int = 200,
+        cleaning_config: Optional[Dict[str, Any]] = None,
     ) -> BatchWriter:
         """
         获取或创建BatchWriter实例
@@ -193,6 +202,7 @@ class BatchWriterManager:
             batch_size: 批量写入大小
             flush_interval: 刷新间隔
             max_buffer_size: 缓冲区最大大小
+            cleaning_config: 清洗配置，格式为 {"source": 0/1, "image_source": 0/1, "author": 0/1}
 
         Returns:
             BatchWriter实例
@@ -200,7 +210,11 @@ class BatchWriterManager:
         async with self._lock:
             if file_name not in self.writers:
                 self.writers[file_name] = BatchWriter(
-                    file_name, batch_size, flush_interval, max_buffer_size
+                    file_name,
+                    batch_size,
+                    flush_interval,
+                    max_buffer_size,
+                    cleaning_config,
                 )
                 # logger.info(f"创建新的批量写入器: {file_name}")
             return self.writers[file_name]
