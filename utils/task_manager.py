@@ -236,7 +236,13 @@ class TaskManager:
         try:
             task.status = TaskStatus.RUNNING
             task.started_at = datetime.now()
+
+            # 创建任务特定的日志记录器
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            task_logger = LoggerConfig.setup_task_logger(task.task_id, project_root)
+
             logger.info(f"开始执行任务: {task.task_id}")
+            task_logger.info(f"任务 {task.task_id} 开始执行")
 
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())
@@ -286,6 +292,9 @@ class TaskManager:
             logger.info(
                 f"任务 {task.task_id} 使用 "
                 f"{'增量采集' if is_incremental else '全量采集'} 模式获取链接"
+            )
+            task_logger.info(
+                f"使用 {'增量采集' if is_incremental else '全量采集'} 模式获取链接"
             )
 
             # 检查函数参数
@@ -349,6 +358,14 @@ class TaskManager:
                 f"links_count={links_count}, "
                 f"file_name={task.file_name} (与task_id相同)"
             )
+            task_logger.info(
+                f"动态参数设置完成: "
+                f"task_name={task.task_name}, "
+                f"is_incremental={task.is_incremental}, "
+                f"batch_size={task.batch_size}, "
+                f"flush_interval={task.flush_interval}, "
+                f"links_count={links_count}"
+            )
 
             # 更新任务状态（包含新字段）
             if self.db_manager:
@@ -384,6 +401,7 @@ class TaskManager:
                 "memory_optimization_threshold", 1000
             )
 
+            task_logger.info(f"开始爬取 {len(links)} 个链接")
             result = await crawl_urls(
                 urls=links,
                 target_elements=target_elements,
@@ -408,6 +426,12 @@ class TaskManager:
                 f"失败 {result['error_count']} 个, "
                 f"文件保存为: {task.file_name}.txt"
             )
+            task_logger.info(
+                f"任务执行成功, "
+                f"成功 {result['success_count']} 个, "
+                f"失败 {result['error_count']} 个, "
+                f"文件保存为: {task.file_name}.txt"
+            )
 
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())
@@ -416,8 +440,20 @@ class TaskManager:
             task.status = TaskStatus.FAILED
             task.failure_reason = str(e)  # 使用failure_reason
             task.completed_at = datetime.now()
+
+            # 获取任务日志记录器（如果存在）
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            task_logger = LoggerConfig.get_logger(f"task_{task.task_id}")
+
             logger.error(f"任务执行失败: {task.task_id}, 错误: {str(e)}", exc_info=True)
             logger.error(traceback.format_exc())
+
+            try:
+                task_logger.error(f"任务执行失败: {str(e)}")
+                task_logger.error(traceback.format_exc())
+            except:
+                # 如果任务日志记录器不可用，忽略错误
+                pass
 
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())

@@ -323,7 +323,10 @@ async def get_links(
 
     # 获取所有URL，传递增量模式参数
     all_urls = await fetch_all_posts_urls(
-        max_pages=max_pages, use_proxy=use_proxy, proxy_list=proxy_list, is_incremental=is_incremental
+        max_pages=max_pages,
+        use_proxy=use_proxy,
+        proxy_list=proxy_list,
+        is_incremental=is_incremental,
     )
 
     # # 去重（虽然理论上不会有重复，但确保数据的唯一性）
@@ -360,7 +363,9 @@ async def main():
     print(f"使用代理: {'是' if use_proxy else '否'}")
     print("开始爬取...")
 
-    result = await get_links(use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental)
+    result = await get_links(
+        use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental
+    )
 
     # 打印结果
     print(f"{mode}：总共获取到 {result['count']} 个链接:")

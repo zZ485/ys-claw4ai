@@ -77,7 +77,7 @@ class MemoryMonitor:
             memory_info = self.get_memory_info()
             if memory_info:
                 # 仅在内存使用率超过60%或明确要求info级别时才记录
-                if memory_info['percent'] > 60 or log_level == "info":
+                if memory_info["percent"] > 60 or log_level == "info":
                     context_str = f"[{context}] " if context else ""
                     log_msg = (
                         f"{context_str}内存使用情况: "
@@ -86,8 +86,8 @@ class MemoryMonitor:
                         f"使用率={memory_info['percent']:.2f}%, "
                         f"系统可用={memory_info['available_mb']:.2f}MB"
                     )
-                    
-                    if memory_info['percent'] > 80:
+
+                    if memory_info["percent"] > 80:
                         logger.warning(log_msg)
                     else:
                         logger.info(log_msg)

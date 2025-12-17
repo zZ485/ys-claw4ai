@@ -304,7 +304,9 @@ async def crawl_urls(
 
             # 记录内存使用情况（仅在内存使用率高时记录）
             if i % (check_interval * 2) == 0 or i >= chunk_count - 1:
-                memory_monitor.log_memory_usage(f"爬取进度: {i}/{chunk_count}", "warning")
+                memory_monitor.log_memory_usage(
+                    f"爬取进度: {i}/{chunk_count}", "warning"
+                )
 
     # 启动内存监控任务
     memory_task = asyncio.create_task(monitor_memory_during_crawl())
@@ -327,7 +329,9 @@ async def crawl_urls(
     total_duration = (end_time - start_time).total_seconds()
 
     # 记录完成时的内存使用情况（仅在内存使用率高时记录）
-    memory_monitor.log_memory_usage(f"爬取完成，总耗时: {total_duration:.2f}秒", "warning")
+    memory_monitor.log_memory_usage(
+        f"爬取完成，总耗时: {total_duration:.2f}秒", "warning"
+    )
 
     logger.info(
         f"批量爬取完成: 总耗时 {total_duration:.2f}秒, 成功 {crawled_count} 个, 失败 {len(errors)} 个"

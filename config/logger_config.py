@@ -2,6 +2,7 @@ import logging
 import os
 import json
 from typing import Optional
+from datetime import datetime
 
 # 获取配置文件路径
 CONFIG_FILE_PATH = os.path.join(
@@ -87,27 +88,53 @@ class LoggerConfig:
 
     @classmethod
     def setup_crawler_logger(
-        cls, log_file: str = None, project_root: Optional[str] = None
+        cls,
+        log_file: str = None,
+        project_root: Optional[str] = None,
+        use_date: bool = True,
     ) -> None:
         """
         设置爬虫项目的日志配置
 
         Args:
-            log_file: 日志文件名，如果为None则使用配置文件中的默认值
+            log_file: 日志文件名（不含路径和扩展名），如果为None则使用配置文件中的默认值
             project_root: 项目根目录，如果为None则使用当前目录
+            use_date: 是否在日志文件名中添加日期，默认为True
         """
         config = load_config()
         crawler_config = config.get("crawler_settings", {})
 
         # 使用参数或默认值
-        log_file_name = log_file or crawler_config.get("log_file", "crawler_api.log")
+        base_log_file_name = log_file or crawler_config.get("log_file", "crawler_api")
         console_output = crawler_config.get("console_output", True)
         log_level_str = crawler_config.get("log_level", "INFO")
 
-        if project_root:
-            log_file_path = os.path.join(project_root, log_file_name)
+        # 如果需要添加日期
+        if use_date:
+            # 移除已有的扩展名（如果有）
+            name_without_ext = os.path.splitext(base_log_file_name)[0]
+            # 获取当前日期
+            current_date = datetime.now().strftime("%Y%m%d")
+            # 组合新的文件名
+            log_file_name = f"{name_without_ext}_{current_date}.log"
         else:
-            log_file_path = log_file_name
+            # 确保有.log扩展名
+            if not base_log_file_name.endswith(".log"):
+                log_file_name = f"{base_log_file_name}.log"
+            else:
+                log_file_name = base_log_file_name
+
+        # 确定日志目录
+        if project_root:
+            logs_dir = os.path.join(project_root, "logs")
+        else:
+            logs_dir = "logs"
+
+        # 确保日志目录存在
+        os.makedirs(logs_dir, exist_ok=True)
+
+        # 组合完整路径
+        log_file_path = os.path.join(logs_dir, log_file_name)
 
         # 将字符串日志级别转换为logging常量
         log_level = getattr(logging, log_level_str, logging.INFO)
@@ -134,6 +161,65 @@ class LoggerConfig:
             logging.Logger: 日志记录器实例
         """
         return logging.getLogger(name)
+
+    @classmethod
+    def setup_task_logger(
+        cls, task_id: str, project_root: Optional[str] = None
+    ) -> logging.Logger:
+        """
+        为特定任务创建日志记录器
+
+        Args:
+            task_id: 任务ID
+            project_root: 项目根目录，如果为None则使用当前目录
+
+        Returns:
+            logging.Logger: 专属于该任务的日志记录器
+        """
+        config = load_config()
+        crawler_config = config.get("crawler_settings", {})
+
+        # 获取当前日期
+        current_date = datetime.now().strftime("%Y%m%d")
+        # 创建任务日志文件名
+        task_log_file = f"task_{task_id}_{current_date}.log"
+
+        # 确定日志目录
+        if project_root:
+            logs_dir = os.path.join(project_root, "logs")
+        else:
+            logs_dir = "logs"
+
+        # 确保日志目录存在
+        os.makedirs(logs_dir, exist_ok=True)
+
+        # 组合完整路径
+        log_file_path = os.path.join(logs_dir, task_log_file)
+
+        # 创建专属于该任务的日志记录器
+        logger_name = f"task_{task_id}"
+        task_logger = logging.getLogger(logger_name)
+        task_logger.setLevel(logging.INFO)
+
+        # 清除现有处理器，避免重复
+        if task_logger.handlers:
+            task_logger.handlers.clear()
+
+        # 创建文件处理器
+        file_handler = logging.FileHandler(log_file_path, encoding="utf-8")
+        log_format = config.get(
+            "default_log_format",
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        file_handler.setFormatter(logging.Formatter(log_format))
+
+        # 添加处理器
+        task_logger.addHandler(file_handler)
+
+        # 防止日志传播到根日志记录器
+        task_logger.propagate = False
+
+        return task_logger
 
     @classmethod
     def reload_config(cls) -> dict:

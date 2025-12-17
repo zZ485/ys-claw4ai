@@ -167,7 +167,9 @@ async def fetch_news_page(session, after_cursor=None, proxy=None, max_retries=3)
     return None
 
 
-async def fetch_all_news(max_pages=5, use_proxy=False, proxy_list=None, is_incremental=False):
+async def fetch_all_news(
+    max_pages=5, use_proxy=False, proxy_list=None, is_incremental=False
+):
     """
     获取多页新闻，返回完整URL列表
     增强反爬虫能力：支持代理、随机延时、请求头轮换
@@ -175,7 +177,7 @@ async def fetch_all_news(max_pages=5, use_proxy=False, proxy_list=None, is_incre
     all_urls = []
     after_cursor = None
     page_count = 0
-    
+
     # 如果是增量模式，先获取最新链接
     latest_link = None
     if is_incremental:
@@ -225,7 +227,7 @@ async def fetch_all_news(max_pages=5, use_proxy=False, proxy_list=None, is_incre
                     full_url = f"https://www.pai.com.cn{url_path}"
                     all_urls.append(full_url)
                     page_urls.append(full_url)
-            
+
             # 增量模式：检查最新链接是否在当前页面中
             if is_incremental and latest_link:
                 if latest_link in page_urls:
@@ -292,7 +294,10 @@ async def get_links(
 
     # 获取所有URL，传递增量模式参数
     all_urls = await fetch_all_news(
-        max_pages=max_pages, use_proxy=use_proxy, proxy_list=proxy_list, is_incremental=is_incremental
+        max_pages=max_pages,
+        use_proxy=use_proxy,
+        proxy_list=proxy_list,
+        is_incremental=is_incremental,
     )
 
     # # 去重（虽然理论上不会有重复，但确保数据的唯一性）
@@ -328,7 +333,9 @@ async def main():
     print(f"使用代理: {'是' if use_proxy else '否'}")
     print("开始爬取...")
 
-    result = await get_links(use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental)
+    result = await get_links(
+        use_proxy=use_proxy, max_pages=max_pages, is_incremental=args.incremental
+    )
 
     # 打印结果
     print(f"{mode}：总共获取到 {result['count']} 个链接:")

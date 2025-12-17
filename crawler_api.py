@@ -24,9 +24,11 @@ from config.crawler_params_config import crawler_params_config
 from utils.crawler_utils import crawl_urls
 from utils.task_manager import task_manager
 
-# 使用LoggerConfig设置日志
+# 使用LoggerConfig设置日志，添加日期到日志文件名
 project_root = os.path.dirname(os.path.abspath(__file__))
-LoggerConfig.setup_crawler_logger(log_file="crawler_api.log", project_root=project_root)
+LoggerConfig.setup_crawler_logger(
+    log_file="crawler_api", project_root=project_root, use_date=True
+)
 logger = LoggerConfig.get_logger(__name__)
 
 
