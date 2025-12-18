@@ -47,6 +47,7 @@ class Task:
             "image_source": 1,  # 0表示关闭，1表示开启
             "author": 1,  # 0表示关闭，1表示开启
         },  # 清洗配置，默认全部开启
+        skip_knowledge_import: bool = False,  # 是否跳过知识库导入
     ):
         self.task_id = task_id
         self.collection_template = collection_template  # 采集模板名称
@@ -56,6 +57,7 @@ class Task:
         self.knowledge_base_id = knowledge_base_id  # 知识库ID
         self.cleaning_config = cleaning_config  # 清洗配置
         self.enable_cleaning = 1
+        self.skip_knowledge_import = skip_knowledge_import  # 是否跳过知识库导入
         self.file_name = task_id
         self.batch_size: int = 10  # 将根据链接数量动态调整
         self.flush_interval: int = 30  # 将根据链接数量动态调整
@@ -127,6 +129,7 @@ class TaskManager:
                     password=db_config.get("password", ""),
                     database=db_config.get("database", ""),
                     log_sql=db_config.get("log_sql", False),
+                    pool_size=db_config.get("pool_size", 10),  # 添加连接池大小配置
                 )
         except Exception as e:
             logger.error(f"数据库管理器初始化失败: {str(e)}")
@@ -144,6 +147,7 @@ class TaskManager:
             "author": 1,  # 0表示关闭，1表示开启
         },  # 清洗配置，默认全部开启
         db_config: Optional[Dict[str, Any]] = None,
+        skip_knowledge_import: bool = False,  # 是否跳过知识库导入
     ) -> str:
         """
         创建新任务并添加到队列中，按照先来后到的顺序执行
@@ -176,7 +180,9 @@ class TaskManager:
                         password=db_config.get("password", ""),
                         database=db_config.get("database", ""),
                         log_sql=db_config.get("log_sql", False),
+                        pool_size=db_config.get("pool_size", 10),  # 添加连接池大小配置
                     )
+                # 使用连接池，这里不需要显式连接
                 await self.db_manager.connect()
             except Exception as e:
                 logger.error(f"数据库连接失败: {str(e)}")
@@ -196,6 +202,7 @@ class TaskManager:
             knowledge_base_name=knowledge_base_name,
             knowledge_base_id=knowledge_base_id,
             cleaning_config=cleaning_config,
+            skip_knowledge_import=skip_knowledge_import,
         )
         self.tasks[task_id] = task
 
@@ -449,12 +456,22 @@ class TaskManager:
                 f"文件保存为: {task.file_name}.txt"
             )
 
+            # 只有满足以下所有条件才会上传到知识库：
+            # 1. 知识库名称不为空
+            # 2. 全局自动上传开关开启
+            # 3. 未设置跳过知识库导入（即知识库ID和名称不都为"-1"）
             if (
                 task.knowledge_base_name
                 and task.knowledge_base_name.strip()
                 and KnowledgeBaseConfig.is_auto_upload_enabled()
+                and not task.skip_knowledge_import
             ):
                 await self._upload_to_knowledge_base(task, task_logger)
+                task_logger.info("已上传文档到知识库")
+            elif task.skip_knowledge_import:
+                task_logger.info("知识库ID和名称均为-1，已跳过知识库导入")
+            elif not KnowledgeBaseConfig.is_auto_upload_enabled():
+                task_logger.info("全局自动上传开关已关闭，已跳过知识库导入")
 
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())
@@ -738,8 +755,10 @@ class TaskManager:
 
     async def disconnect_db(self):
         """断开数据库连接"""
+        # 不需要断开连接，因为连接池是全局共享的
+        # 连接池将在应用关闭时关闭
         if self.db_manager:
-            await self.db_manager.disconnect()
+            logger.info("任务管理器数据库连接管理器已断开")
 
 
 # 创建全局任务管理器实例

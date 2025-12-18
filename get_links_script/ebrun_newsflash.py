@@ -222,15 +222,24 @@ def extract_news_img_links(html_content):
     return links
 
 
-async def fetch_all_links(use_proxy=False, proxy_list=None, max_pages=None):
+async def fetch_all_links(
+    use_proxy=False,
+    proxy_list=None,
+    max_pages=None,
+    is_incremental=False,
+    latest_link=None,
+):
     """
     获取所有页面链接，返回完整URL列表
     增强反爬虫能力：支持代理、随机延时、请求头轮换、FECU令牌自动更新
+    增量爬取支持：可以在爬取过程中检查最新链接
 
     参数:
         use_proxy: 是否使用代理
         proxy_list: 代理IP列表
         max_pages: 最大爬取页数，默认为None表示不限制，获取所有页面
+        is_incremental: 是否增量模式，默认为False
+        latest_link: 最新链接URL，增量模式下使用
     """
     all_links = []
     page_count = 0
@@ -306,9 +315,23 @@ async def fetch_all_links(use_proxy=False, proxy_list=None, max_pages=None):
                 if html_content:
                     # 提取链接
                     page_links = extract_news_img_links(html_content)
-                    all_links.extend(page_links)
 
-                    print(f"本页提取到 {len(page_links)} 个链接")
+                    # 增量模式：检查最新链接是否在当前页面中
+                    if is_incremental and latest_link and page_links:
+                        if latest_link in page_links:
+                            print(f"第 {page_num} 页包含最新链接，停止爬取")
+                            # 获取最新链接之前的所有链接
+                            index = page_links.index(latest_link)
+                            filtered_links = page_links[:index]
+                            all_links.extend(filtered_links)
+                            print(f"本页提取到 {len(filtered_links)} 个新链接")
+                            break
+                        else:
+                            all_links.extend(page_links)
+                            print(f"本页提取到 {len(page_links)} 个链接")
+                    else:
+                        all_links.extend(page_links)
+                        print(f"本页提取到 {len(page_links)} 个链接")
             elif data:
                 print(f"获取数据失败，响应代码: {data.get('code')}")
 
@@ -367,9 +390,22 @@ async def get_links(
             print("警告：未配置有效代理，将不使用代理")
             use_proxy = False
 
-    # 获取所有URL
+    # 如果是增量模式，先获取最新链接
+    latest_link = None
+    if is_incremental:
+        latest_link = await get_latest_link_from_db()
+        if latest_link:
+            print(f"增量模式：最新链接为 {latest_link}")
+        else:
+            print("增量模式：未找到最新链接，将爬取所有链接")
+
+    # 获取所有URL，支持增量模式
     all_links = await fetch_all_links(
-        use_proxy=use_proxy, proxy_list=proxy_list, max_pages=max_pages
+        use_proxy=use_proxy,
+        proxy_list=proxy_list,
+        max_pages=max_pages,
+        is_incremental=is_incremental,
+        latest_link=latest_link,
     )
 
     # 去重（虽然理论上不会有重复，但确保数据的唯一性）
@@ -377,16 +413,15 @@ async def get_links(
 
     unique_links.sort(key=lambda x: x.split("/")[-1].split(".")[0], reverse=True)
 
-    # 使用增量爬取辅助模块过滤链接
-    from utils.incremental_crawler import (
-        filter_links_for_crawl,
-        prepare_links_result,
-        get_latest_link_from_db,
-    )
-
-    filtered_links = await filter_links_for_crawl(
-        unique_links, is_incremental, db_manager=db_manager
-    )
+    # 如果不是增量模式，或者增量模式但没有在爬取过程中过滤，则需要在这里进行过滤
+    # 如果是增量模式且已经在爬取过程中过滤了，就不需要再次过滤
+    if not is_incremental or not latest_link:
+        filtered_links = await filter_links_for_crawl(
+            unique_links, is_incremental, db_manager=db_manager
+        )
+    else:
+        # 增量模式且已经在爬取过程中过滤了，直接使用获取的链接
+        filtered_links = unique_links
 
     # 返回符合任务管理器期望的格式，将links键放在顶层
     return prepare_links_result(filtered_links, is_incremental)

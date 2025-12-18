@@ -46,12 +46,15 @@ def get_db_config() -> Dict[str, Any]:
                 "DB_LOG_SQL", str(db_config.get("log_sql", "false"))
             ).lower()
             == "true",
+            "pool_size": int(
+                os.getenv("DB_POOL_SIZE", str(db_config.get("pool_size", "10")))
+            ),
         }
 
-        # 记录当前使用的配置（隐藏密码）
-        logger.info(
-            f"数据库配置 - 主机: {db_config['host']}, 端口: {db_config['port']}, 用户: {db_config['user']}, 数据库: {db_config['database']}"
-        )
+        # # 记录当前使用的配置（隐藏密码）
+        # logger.info(
+        #     f"数据库配置 - 主机: {db_config['host']}, 端口: {db_config['port']}, 用户: {db_config['user']}, 数据库: {db_config['database']}"
+        # )
 
         # 检查是否所有必要的配置都已设置
         missing_fields = [
@@ -92,6 +95,7 @@ def _get_default_config() -> Dict[str, Any]:
         "password": "123456yY",
         "database": "SYSDBA",
         "log_sql": False,
+        "pool_size": 10,  # 添加连接池大小的默认配置
     }
 
 

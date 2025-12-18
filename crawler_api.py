@@ -36,10 +36,38 @@ logger = LoggerConfig.get_logger(__name__)
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     # 启动时的处理
-    # logger.info("Crawl4AI API 服务启动")
+    logger.info("Crawl4AI API 服务启动中...")
+
+    # 初始化数据库连接池
+    try:
+        from utils.db_manager import init_database_connection_pool
+
+        db_config = get_db_config()
+        if db_config:
+            success = await init_database_connection_pool(
+                host=db_config.get("host", "localhost"),
+                port=db_config.get("port", 5236),
+                user=db_config.get("user", ""),
+                password=db_config.get("password", ""),
+                database=db_config.get("database", ""),
+                log_sql=db_config.get("log_sql", False),
+                pool_size=db_config.get("pool_size", 10),
+            )
+            if success:
+                logger.info("数据库连接池初始化成功")
+            else:
+                logger.warning("数据库连接池初始化失败，数据库功能可能不可用")
+        else:
+            logger.warning("未找到数据库配置，数据库功能可能不可用")
+    except Exception as e:
+        logger.error(f"初始化数据库连接池时发生异常: {str(e)}")
+
+    logger.info("Crawl4AI API 服务启动完成")
+
     yield
+
     # 关闭时的处理
-    # logger.info("Crawl4AI API 服务关闭中...")
+    logger.info("Crawl4AI API 服务关闭中...")
     # 尝试执行清理操作，但不阻塞关闭过程
     try:
         await cleanup_on_shutdown()
@@ -74,10 +102,10 @@ app.add_middleware(
 
 
 class CollectRequest(BaseModel):
-    target: str  # 目标配置，如 shanghai_cross_border_association_news
-    task_name: str  # 任务名称
+    target: str  # 目标配置，如 shanghai_cross_border_association_news（必须提供）
+    task_name: str  # 任务名称（必须提供）
     is_incremental: int = 0  # 是否增量，1表示增量采集，0表示全量采集
-    knowledge_base_name: str  # 知识库名称
+    knowledge_base_name: str  # 知识库名称（必须提供）
     knowledge_base_id: str  # 知识库ID（必须提供）
     force_upload_by_id: bool = False  # 是否强制使用ID上传且不检查一致性
     cleaning_config: dict = {
@@ -110,7 +138,9 @@ class TaskListRequest(BaseModel):
     end_time: Optional[str] = None  # 结束时间（格式：YYYY-MM-DD）
     # 等值匹配条件
     collection_template: Optional[str] = None  # 采集模板（等值匹配）
-    task_type: Optional[int] = None  # 任务类型（0-全量，1-增量）（等值匹配）
+    task_type: Optional[int] = (
+        0  # 任务类型（0-全量，1-增量）（等值匹配），默认为0（全量）
+    )
     task_status: Optional[str] = None  # 任务状态（等值匹配）
     knowledge_base_name: Optional[str] = None  # 知识库（等值匹配）
 
@@ -267,6 +297,15 @@ async def collect_data(request: CollectRequest):
         if not request.knowledge_base_id or not request.knowledge_base_id.strip():
             return build_response(code=400, message="knowledge_base_id不能为空")
 
+        # 检查knowledge_base_name是否为空
+        if not request.knowledge_base_name or not request.knowledge_base_name.strip():
+            return build_response(code=400, message="knowledge_base_name不能为空")
+
+        # 检查知识库名称和ID是否都为"-1"，如果是则标记为不导入知识库
+        skip_knowledge_import = (
+            request.knowledge_base_name == "-1" and request.knowledge_base_id == "-1"
+        )
+
         # 知识库一致性检查（除非强制上传）
         if not request.force_upload_by_id:
             # 如果提供了知识库ID，则需要检查与之前任务的一致性
@@ -319,6 +358,7 @@ async def collect_data(request: CollectRequest):
             knowledge_base_name=request.knowledge_base_name,
             knowledge_base_id=request.knowledge_base_id,
             cleaning_config=request.cleaning_config,
+            skip_knowledge_import=skip_knowledge_import,
         )
 
         logger.info(
@@ -477,8 +517,8 @@ async def get_tasks_with_pagination(request: TaskListRequest):
         # 等值匹配条件
         if request.collection_template:
             query_conditions["collection_template"] = request.collection_template
-        if request.task_type is not None:
-            query_conditions["task_type"] = request.task_type
+        # task_type 现在默认为0（全量），所以总是包含在查询条件中
+        query_conditions["task_type"] = request.task_type
         if request.task_status:
             query_conditions["task_status"] = request.task_status
         if request.knowledge_base_name:
@@ -661,10 +701,16 @@ async def cleanup_on_shutdown():
         except Exception as e:
             logger.error(f"关闭批量写入器时发生异常: {str(e)}")
 
-        # 断开数据库连接
+        # 断开数据库连接和关闭连接池
         try:
             await task_manager.disconnect_db()
-            logger.info("数据库连接已断开")
+            logger.info("任务管理器数据库连接已断开")
+
+            # 关闭全局连接池
+            from utils.db_manager import cleanup_database_resources
+
+            await cleanup_database_resources()
+            logger.info("全局数据库连接池已关闭")
         except Exception as e:
             logger.error(f"断开数据库连接时发生异常: {str(e)}")
 

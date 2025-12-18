@@ -6,6 +6,7 @@
     "password": "123456yY",
     "database": "SYSDBA",
     "description": "达梦数据库连接配置",
-    "log_sql": false
+    "log_sql": false,
+    "pool_size": 10
   }
 }

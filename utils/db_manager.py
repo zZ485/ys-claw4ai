@@ -1,12 +1,17 @@
 """
 达梦数据库操作模块
 用于管理任务数据的持久化存储
+实现了连接池机制，连接健康检查和自动重连功能
 """
 
 import asyncio
 import traceback
-from datetime import datetime
-from typing import Optional, Dict, List, Any
+import time
+import threading
+from datetime import datetime, timedelta
+from typing import Optional, Dict, List, Any, Union
+from contextlib import asynccontextmanager
+from queue import Queue, Empty
 from config.logger_config import LoggerConfig
 
 # 获取日志记录器
@@ -26,8 +31,307 @@ except ImportError:
     )
 
 
+async def init_database_connection_pool(
+    host: str = "localhost",
+    port: int = 5236,
+    user: str = "",
+    password: str = "",
+    database: str = "",
+    log_sql: bool = False,
+    pool_size: Optional[int] = None,
+):
+    """
+    初始化全局数据库连接池
+
+    Args:
+        host: 数据库主机地址
+        port: 数据库端口
+        user: 用户名
+        password: 密码
+        database: 数据库名称
+        log_sql: 是否记录SQL日志
+        pool_size: 连接池大小，默认None表示使用默认值
+    """
+    try:
+        manager = get_db_manager(
+            host, port, user, password, database, log_sql, pool_size
+        )
+        await manager.connect()  # 这会初始化连接池
+        logger.info(f"数据库连接池初始化成功: {host}:{port}/{database}")
+        return True
+    except Exception as e:
+        logger.error(f"数据库连接池初始化失败: {str(e)}")
+        return False
+
+
+async def cleanup_database_resources():
+    """清理数据库资源"""
+    close_connection_pool()
+    logger.info("数据库资源清理完成")
+
+
+class DatabaseConnection:
+    """数据库连接封装类，用于连接池管理"""
+
+    def __init__(self, connection, pool, last_used=None):
+        self.connection = connection
+        self.pool = pool
+        self.last_used = last_used or time.time()
+        self.in_use = False
+        self.is_valid = True
+
+    def update_last_used(self):
+        """更新最后使用时间"""
+        self.last_used = time.time()
+
+    def is_expired(self, max_lifetime=3600):
+        """检查连接是否过期"""
+        return time.time() - self.last_used > max_lifetime
+
+    def is_healthy(self):
+        """检查连接是否健康"""
+        if not self.connection or self.is_valid is False:
+            return False
+
+        try:
+            cursor = self.connection.cursor()
+            cursor.execute("SELECT 1")
+            cursor.close()
+            return True
+        except:
+            self.is_valid = False
+            return False
+
+    def close(self):
+        """关闭连接"""
+        if self.connection:
+            try:
+                self.connection.close()
+            except:
+                pass
+            self.connection = None
+            self.is_valid = False
+
+
+class ConnectionPool:
+    """数据库连接池"""
+
+    def __init__(
+        self,
+        min_connections=2,
+        max_connections=10,
+        connection_timeout=30,
+        max_lifetime=3600,
+        health_check_interval=300,
+    ):
+        """
+        初始化连接池
+
+        Args:
+            min_connections: 最小连接数
+            max_connections: 最大连接数
+            connection_timeout: 连接超时时间(秒)
+            max_lifetime: 连接最大存活时间(秒)
+            health_check_interval: 健康检查间隔(秒)
+        """
+        self.min_connections = min_connections
+        self.max_connections = max_connections
+        self.connection_timeout = connection_timeout
+        self.max_lifetime = max_lifetime
+        self.health_check_interval = health_check_interval
+
+        self._pool = Queue()
+        self._all_connections = []
+        self._connection_count = 0
+        self._lock = threading.Lock()
+        self._closed = False
+
+        # 连接参数
+        self.host = None
+        self.port = None
+        self.user = None
+        self.password = None
+        self.database = None
+
+        # 健康检查线程
+        self._health_check_thread = None
+
+    def configure(self, host, port, user, password, database):
+        """配置数据库连接参数"""
+        self.host = host
+        self.port = port
+        self.user = user
+        self.password = password
+        self.database = database
+
+    def _create_connection(self):
+        """创建新连接"""
+        try:
+            # 尝试使用最简单的连接方式
+            connection = dmPython.connect(
+                user=self.user,
+                password=self.password,
+                server=self.host,
+                port=self.port,
+            )
+            return DatabaseConnection(connection, self)
+        except Exception as e:
+            logger.error(f"创建数据库连接失败: {str(e)}")
+            raise
+
+    def _initialize_pool(self):
+        """初始化连接池，创建最小连接数"""
+        if not self.host or not self.user:
+            raise ValueError("数据库连接参数未配置")
+
+        for _ in range(self.min_connections):
+            try:
+                conn = self._create_connection()
+                self._pool.put(conn)
+                self._all_connections.append(conn)
+                self._connection_count += 1
+            except Exception as e:
+                logger.error(f"初始化连接池失败: {str(e)}")
+                raise
+
+    def start(self):
+        """启动连接池"""
+        self._initialize_pool()
+        self._start_health_check()
+        logger.info(f"数据库连接池已启动，初始连接数: {self.min_connections}")
+
+    def _start_health_check(self):
+        """启动健康检查线程"""
+        self._health_check_thread = threading.Thread(
+            target=self._health_check_loop, daemon=True
+        )
+        self._health_check_thread.start()
+
+    def _health_check_loop(self):
+        """健康检查循环"""
+        while not self._closed:
+            try:
+                self._perform_health_check()
+                time.sleep(self.health_check_interval)
+            except Exception as e:
+                logger.error(f"连接池健康检查异常: {str(e)}")
+                time.sleep(30)  # 出错后等待30秒再重试
+
+    def _perform_health_check(self):
+        """执行健康检查"""
+        with self._lock:
+            # 检查所有连接的健康状态
+            for conn in list(self._all_connections):
+                if not conn.in_use and not conn.is_healthy():
+                    logger.warning("发现不健康的连接，将其移除")
+                    self._remove_connection(conn)
+
+            # 确保连接数不低于最小值
+            active_connections = len([c for c in self._all_connections if c.is_valid])
+            if active_connections < self.min_connections:
+                needed = self.min_connections - active_connections
+                logger.info(f"创建 {needed} 个新连接以满足最小连接数")
+                for _ in range(needed):
+                    try:
+                        conn = self._create_connection()
+                        self._pool.put(conn)
+                        self._all_connections.append(conn)
+                        self._connection_count += 1
+                    except Exception as e:
+                        logger.error(f"创建新连接失败: {str(e)}")
+
+    def _remove_connection(self, conn):
+        """从连接池中移除连接"""
+        try:
+            conn.close()
+            if conn in self._all_connections:
+                self._all_connections.remove(conn)
+                self._connection_count -= 1
+        except Exception as e:
+            logger.error(f"移除连接失败: {str(e)}")
+
+    @asynccontextmanager
+    async def get_connection(self):
+        """获取数据库连接"""
+        if self._closed:
+            raise RuntimeError("连接池已关闭")
+
+        conn = None
+        try:
+            # 尝试从池中获取连接
+            try:
+                conn = self._pool.get(timeout=self.connection_timeout)
+            except Empty:
+                # 如果池为空，尝试创建新连接
+                if self._connection_count < self.max_connections:
+                    with self._lock:
+                        if self._connection_count < self.max_connections:
+                            conn = self._create_connection()
+                            self._all_connections.append(conn)
+                            self._connection_count += 1
+
+                # 如果还是没有连接，等待一段时间再试
+                if not conn:
+                    logger.warning("连接池已满，等待可用连接")
+                    conn = self._pool.get(timeout=self.connection_timeout)
+
+            # 检查连接是否有效，如果无效则创建新连接
+            if conn and (conn.is_expired(self.max_lifetime) or not conn.is_healthy()):
+                self._remove_connection(conn)
+                with self._lock:
+                    if self._connection_count < self.max_connections:
+                        conn = self._create_connection()
+                        self._all_connections.append(conn)
+                        self._connection_count += 1
+                    else:
+                        # 连接池已满，等待一个可用连接
+                        conn = self._pool.get(timeout=self.connection_timeout)
+
+            conn.in_use = True
+            conn.update_last_used()
+
+            yield conn.connection
+
+        except Exception as e:
+            logger.error(f"获取或使用连接失败: {str(e)}")
+            if conn:
+                conn.is_valid = False
+            raise
+        finally:
+            if conn:
+                conn.in_use = False
+                try:
+                    self._pool.put(conn, timeout=5)
+                except:
+                    # 如果无法放回池中，可能池已关闭
+                    logger.warning("无法将连接放回池中，可能池已关闭")
+
+    def close(self):
+        """关闭连接池"""
+        self._closed = True
+
+        # 关闭所有连接
+        for conn in self._all_connections:
+            conn.close()
+
+        self._all_connections.clear()
+        self._connection_count = 0
+
+        # 清空队列
+        while not self._pool.empty():
+            try:
+                self._pool.get_nowait()
+            except Empty:
+                break
+
+        logger.info("数据库连接池已关闭")
+
+
 class DatabaseManager:
     """达梦数据库管理器"""
+
+    _pool = None
+    _pool_lock = threading.Lock()
 
     def __init__(
         self,
@@ -37,6 +341,7 @@ class DatabaseManager:
         password: str = "",
         database: str = "",
         log_sql: bool = False,
+        pool_size: Optional[int] = None,
     ):
         """
         初始化数据库连接参数
@@ -48,6 +353,7 @@ class DatabaseManager:
             password: 密码
             database: 数据库名称
             log_sql: 是否记录SQL日志
+            pool_size: 连接池大小，默认None表示使用默认值
         """
         self.host = host
         self.port = port
@@ -55,163 +361,59 @@ class DatabaseManager:
         self.password = password
         self.database = database
         self.log_sql = log_sql
-        self.connection = None
-        self._connected = False
+
+        # 初始化连接池
+        self._init_pool(pool_size)
+
+    def _init_pool(self, pool_size):
+        """初始化连接池"""
+        with DatabaseManager._pool_lock:
+            if DatabaseManager._pool is None:
+                # 根据传入参数设置连接池大小
+                min_conn = 2
+                max_conn = 10
+                if pool_size:
+                    min_conn = max(1, pool_size // 2)
+                    max_conn = pool_size
+
+                DatabaseManager._pool = ConnectionPool(
+                    min_connections=min_conn,
+                    max_connections=max_conn,
+                    connection_timeout=30,
+                    max_lifetime=3600,
+                    health_check_interval=300,
+                )
+                DatabaseManager._pool.configure(
+                    self.host, self.port, self.user, self.password, self.database
+                )
+                DatabaseManager._pool.start()
+
+    @property
+    def pool(self):
+        """获取连接池"""
+        return DatabaseManager._pool
 
     async def connect(self):
-        """连接到达梦数据库"""
+        """连接到达梦数据库（兼容旧版本接口）"""
+        # 连接池已在初始化时启动，这里不需要做任何操作
         if not DM_DRIVER_AVAILABLE:
             raise ImportError("dmPython驱动未安装，请安装达梦数据库Python驱动")
 
-        if self._connected:
-            return
+        # 检查连接池是否可用
+        if not self.pool or self.pool._closed:
+            logger.warning("连接池不可用，尝试重新初始化")
+            self._init_pool(None)
 
-        try:
-            # 使用异步线程池执行阻塞的数据库连接操作
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, self._sync_connect)
-            self._connected = True
-            logger.info(
-                f"成功连接到达梦数据库: {self.host}:{self.port}/{self.database}"
-            )
-        except Exception as e:
-            logger.error(f"连接达梦数据库失败: {str(e)}")
-            raise
-
-    def _sync_connect(self):
-        """同步连接数据库（在线程池中执行）"""
-        try:
-            # 检查所有连接参数是否有效
-            logger.info(
-                f"尝试连接达梦数据库: host={self.host}, port={self.port}, user={self.user}, database={self.database}"
-            )
-
-            # 尝试多种连接方式来增加兼容性
-            connection_established = False
-            last_exception = None
-
-            # 方式1: 标准参数连接，但不指定数据库
-            try:
-                self.connection = dmPython.connect(
-                    user=self.user,
-                    password=self.password,
-                    server=self.host,
-                    port=self.port,
-                )
-                connection_established = True
-                # logger.info("使用标准参数成功连接到达梦数据库（未指定数据库）")
-            except Exception as e:
-                last_exception = e
-                logger.warning(f"标准连接方式(未指定数据库)失败: {str(e)}")
-
-            # 方式2: 标准参数连接，指定数据库
-            if not connection_established:
-                try:
-                    self.connection = dmPython.connect(
-                        user=self.user,
-                        password=self.password,
-                        server=self.host,
-                        port=self.port,
-                        database=self.database,
-                    )
-                    connection_established = True
-                    logger.info("使用标准参数成功连接到达梦数据库（指定数据库）")
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(f"标准连接方式(指定数据库)失败: {str(e)}")
-
-            # 方式3: 使用DSN字符串（不指定数据库）
-            if not connection_established:
-                try:
-                    dsn = f"dm://{self.user}:{self.password}@{self.host}:{self.port}"
-                    self.connection = dmPython.connect(dsn)
-                    connection_established = True
-                    logger.info("使用DSN方式成功连接到达梦数据库（未指定数据库）")
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(f"DSN连接方式(未指定数据库)失败: {str(e)}")
-
-            # 方式4: 使用DSN字符串（指定数据库）
-            if not connection_established:
-                try:
-                    dsn = f"dm://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
-                    self.connection = dmPython.connect(dsn)
-                    connection_established = True
-                    logger.info("使用DSN方式成功连接到达梦数据库（指定数据库）")
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(f"DSN连接方式(指定数据库)失败: {str(e)}")
-
-            # 方式5: 尝试使用host参数而不是server
-            if not connection_established:
-                try:
-                    self.connection = dmPython.connect(
-                        user=self.user,
-                        password=self.password,
-                        host=self.host,  # 使用host而不是server
-                        port=self.port,
-                    )
-                    connection_established = True
-                    logger.info("使用host参数成功连接到达梦数据库")
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(f"使用host参数连接失败: {str(e)}")
-
-            # 方式6: 如果host是localhost，尝试使用127.0.0.1
-            if not connection_established and self.host == "localhost":
-                try:
-                    self.connection = dmPython.connect(
-                        user=self.user,
-                        password=self.password,
-                        server="127.0.0.1",
-                        port=self.port,
-                    )
-                    connection_established = True
-                    logger.info("使用127.0.0.1成功连接到达梦数据库")
-                except Exception as e:
-                    last_exception = e
-                    logger.warning(f"使用127.0.0.1连接失败: {str(e)}")
-
-            # 如果所有方式都失败了，抛出最后一个异常
-            if not connection_established:
-                logger.error(f"所有连接方式都失败了")
-                logger.error(f"最后一个错误: {str(last_exception)}")
-                raise last_exception
-
-            # 测试连接是否有效
-            if self.connection:
-                cursor = self.connection.cursor()
-                cursor.execute("SELECT 1")
-                cursor.close()
-                # logger.info("数据库连接验证成功")
-
-        except ImportError as e:
-            logger.error(f"dmPython驱动导入失败: {str(e)}")
-            logger.error("请确保已正确安装达梦数据库Python驱动: pip install dmPython")
-            raise
-        except Exception as e:
-            logger.error(f"同步连接数据库失败: {str(e)}")
-            logger.error(f"错误类型: {type(e).__name__}")
-            logger.error("请检查以下配置是否正确:")
-            logger.error(f"  - 主机地址: {self.host}")
-            logger.error(f"  - 端口: {self.port}")
-            logger.error(f"  - 用户名: {self.user}")
-            logger.error(f"  - 数据库名: {self.database}")
-            logger.error("请确保达梦数据库服务正在运行，且连接参数正确")
-            raise
+        logger.info(
+            f"数据库连接池已就绪，准备执行操作: {self.host}:{self.port}/{self.database}"
+        )
+        return True
 
     async def disconnect(self):
         """断开数据库连接"""
-        if self.connection:
-            try:
-                # 使用异步线程池执行阻塞的数据库关闭操作
-                loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, self.connection.close)
-                self._connected = False
-                logger.info("已断开达梦数据库连接")
-            except Exception as e:
-                logger.error(f"断开数据库连接失败: {str(e)}")
-                pass
+        # 这里我们不做任何操作，因为连接池是全局共享的
+        # 连接池将在程序退出时关闭
+        logger.info("数据库连接管理器已断开")
 
     async def execute_query(
         self, sql: str, params: tuple = None
@@ -226,8 +428,8 @@ class DatabaseManager:
         Returns:
             查询结果列表
         """
-        if not self._connected:
-            await self.connect()
+        if not DM_DRIVER_AVAILABLE:
+            raise ImportError("dmPython驱动未安装，请安装达梦数据库Python驱动")
 
         # 根据配置决定是否打印SQL语句
         if self.log_sql:
@@ -238,35 +440,37 @@ class DatabaseManager:
                 logger.info("查询参数: 无")
 
         try:
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, self._sync_execute_query, sql, params
-            )
-            # logger.info(f"查询完成，返回 {len(result)} 条记录")
-            return result
+            async with self.pool.get_connection() as conn:
+                result = await self._async_execute_query(conn, sql, params)
+                return result
         except Exception as e:
             logger.error(f"执行查询SQL失败: {sql}, 错误: {str(e)}")
             raise
 
-    def _sync_execute_query(
-        self, sql: str, params: tuple = None
+    async def _async_execute_query(
+        self, conn, sql: str, params: tuple = None
     ) -> List[Dict[str, Any]]:
-        """同步执行查询（在线程池中执行）"""
-        cursor = self.connection.cursor()
-        try:
-            cursor.execute(sql, params or ())
-            columns = [desc[0] for desc in cursor.description]
-            result = []
-            for row in cursor.fetchall():
-                # 处理达梦返回的字段名大小写问题
-                row_dict = {}
-                for i, col in enumerate(columns):
-                    # 优先使用小写字段名，兼容应用层代码
-                    row_dict[col.lower()] = row[i]
-                result.append(row_dict)
-            return result
-        finally:
-            cursor.close()
+        """异步执行查询（使用连接池）"""
+        loop = asyncio.get_event_loop()
+
+        def _execute():
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, params or ())
+                columns = [desc[0] for desc in cursor.description]
+                result = []
+                for row in cursor.fetchall():
+                    # 处理达梦返回的字段名大小写问题
+                    row_dict = {}
+                    for i, col in enumerate(columns):
+                        # 优先使用小写字段名，兼容应用层代码
+                        row_dict[col.lower()] = row[i]
+                    result.append(row_dict)
+                return result
+            finally:
+                cursor.close()
+
+        return await loop.run_in_executor(None, _execute)
 
     async def execute_update(self, sql: str, params: tuple = None) -> int:
         """
@@ -279,8 +483,8 @@ class DatabaseManager:
         Returns:
             受影响的行数
         """
-        if not self._connected:
-            await self.connect()
+        if not DM_DRIVER_AVAILABLE:
+            raise ImportError("dmPython驱动未安装，请安装达梦数据库Python驱动")
 
         # 根据配置决定是否打印SQL语句
         if self.log_sql:
@@ -291,29 +495,31 @@ class DatabaseManager:
                 logger.info("更新参数: 无")
 
         try:
-            loop = asyncio.get_event_loop()
-            result = await loop.run_in_executor(
-                None, self._sync_execute_update, sql, params
-            )
-            # logger.info(f"更新完成，影响 {result} 行")
-            return result
+            async with self.pool.get_connection() as conn:
+                result = await self._async_execute_update(conn, sql, params)
+                return result
         except Exception as e:
             logger.error(f"执行更新SQL失败: {sql}, 错误: {str(e)}")
             logger.error(traceback.format_exc())
             raise
 
-    def _sync_execute_update(self, sql: str, params: tuple = None) -> int:
-        """同步执行更新（在线程池中执行）"""
-        cursor = self.connection.cursor()
-        try:
-            cursor.execute(sql, params or ())
-            self.connection.commit()
-            return cursor.rowcount
-        except Exception as e:
-            self.connection.rollback()
-            raise
-        finally:
-            cursor.close()
+    async def _async_execute_update(self, conn, sql: str, params: tuple = None) -> int:
+        """异步执行更新（使用连接池）"""
+        loop = asyncio.get_event_loop()
+
+        def _execute():
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, params or ())
+                conn.commit()
+                return cursor.rowcount
+            except Exception as e:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+
+        return await loop.run_in_executor(None, _execute)
 
     async def save_task(self, task_data: Dict[str, Any]) -> bool:
         """
@@ -329,11 +535,22 @@ class DatabaseManager:
             sql = """
             INSERT INTO collection_task (
                 task_id, task_name, task_status, collection_template, 
-                task_type, knowledge_base_name, knowledge_base_id, failure_reason, 
-                create_time, complete_time, progress, total_links, 
+                task_type, knowledge_base_name, knowledge_base_id, cleaning_config,
+                failure_reason, create_time, complete_time, progress, total_links, 
                 success_count, error_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
+
+            # 将清洗配置字典转换为JSON字符串
+            cleaning_config = task_data.get(
+                "cleaning_config", {"source": 1, "image_source": 1, "author": 1}
+            )
+            if isinstance(cleaning_config, dict):
+                import json
+
+                cleaning_config_str = json.dumps(cleaning_config)
+            else:
+                cleaning_config_str = str(cleaning_config)
 
             # 准备参数，确保类型正确
             params = (
@@ -350,6 +567,7 @@ class DatabaseManager:
                 ),  # 0-全量, 1-增量，转换为整数，优先使用task_type
                 task_data.get("knowledge_base_name", ""),  # 知识库名称
                 task_data.get("knowledge_base_id", ""),  # 知识库ID，默认空字符串
+                cleaning_config_str,  # 清洗配置JSON字符串
                 task_data.get("failure_reason"),  # 失败原因
                 task_data.get("create_time", datetime.now()),  # 创建时间
                 task_data.get("complete_time"),  # 完成时间
@@ -387,6 +605,7 @@ class DatabaseManager:
                 task_type = ?,
                 knowledge_base_name = ?,
                 knowledge_base_id = ?, 
+                cleaning_config = ?,
                 failure_reason = ?,
                 complete_time = ?,
                 progress = ?,
@@ -395,6 +614,17 @@ class DatabaseManager:
                 error_count = ?
             WHERE task_id = ?
             """
+
+            # 将清洗配置字典转换为JSON字符串
+            cleaning_config = task_data.get(
+                "cleaning_config", {"source": 1, "image_source": 1, "author": 1}
+            )
+            if isinstance(cleaning_config, dict):
+                import json
+
+                cleaning_config_str = json.dumps(cleaning_config)
+            else:
+                cleaning_config_str = str(cleaning_config)
 
             # 准备参数
             params = (
@@ -406,6 +636,7 @@ class DatabaseManager:
                 ),  # 转换为整数，优先使用task_type
                 task_data.get("knowledge_base_name", ""),
                 task_data.get("knowledge_base_id", ""),  # 知识库ID
+                cleaning_config_str,  # 清洗配置JSON字符串
                 task_data.get("failure_reason"),
                 task_data.get("complete_time"),
                 int(task_data.get("progress", 0)),
@@ -460,6 +691,19 @@ class DatabaseManager:
         # 确保任务类型为整数
         task_type = int(db_task.get("task_type", db_task.get("TASK_TYPE", 0)))
 
+        # 处理清洗配置，从JSON字符串转换为字典
+        cleaning_config = db_task.get("cleaning_config") or db_task.get(
+            "CLEANING_CONFIG", '{"source": 1, "image_source": 1, "author": 1}'
+        )
+        if isinstance(cleaning_config, str):
+            try:
+                import json
+
+                cleaning_config = json.loads(cleaning_config)
+            except (json.JSONDecodeError, TypeError):
+                # 如果解析失败，使用默认配置
+                cleaning_config = {"source": 1, "image_source": 1, "author": 1}
+
         return {
             "task_id": db_task.get("task_id") or db_task.get("TASK_ID"),
             "task_name": db_task.get("task_name") or db_task.get("TASK_NAME"),
@@ -472,6 +716,7 @@ class DatabaseManager:
             or db_task.get("KNOWLEDGE_BASE_NAME"),
             "knowledge_base_id": db_task.get("knowledge_base_id")
             or db_task.get("KNOWLEDGE_BASE_ID", ""),  # 知识库ID
+            "cleaning_config": cleaning_config,  # 清洗配置字典
             "failure_reason": db_task.get("failure_reason")
             or db_task.get("FAILURE_REASON"),
             "create_time": (
@@ -666,7 +911,19 @@ class DatabaseManager:
 
     async def is_connected(self) -> bool:
         """检查数据库是否已连接"""
-        return self._connected and self.connection is not None
+        if not self.pool or self.pool._closed:
+            return False
+
+        # 尝试获取一个连接来检查是否可用
+        try:
+            async with self.pool.get_connection() as conn:
+                # 简单执行一个查询来验证连接
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+                return True
+        except:
+            return False
 
     async def save_latest_link(self, collection_template: str, url: str) -> bool:
         """
@@ -780,6 +1037,7 @@ class DatabaseManager:
 
 # 全局数据库管理器实例
 db_manager = None
+_manager_lock = threading.Lock()
 
 
 def get_db_manager(
@@ -789,9 +1047,10 @@ def get_db_manager(
     password: str = "",
     database: str = "",
     log_sql: bool = False,
+    pool_size: Optional[int] = None,
 ) -> DatabaseManager:
     """
-    获取全局数据库管理器实例
+    获取全局数据库管理器实例（单例模式）
 
     Args:
         host: 数据库主机地址
@@ -800,11 +1059,27 @@ def get_db_manager(
         password: 密码
         database: 数据库名称
         log_sql: 是否记录SQL日志
+        pool_size: 连接池大小，默认None表示使用默认值
 
     Returns:
         数据库管理器实例
     """
     global db_manager
-    if db_manager is None:
-        db_manager = DatabaseManager(host, port, user, password, database, log_sql)
-    return db_manager
+
+    with _manager_lock:
+        if db_manager is None:
+            db_manager = DatabaseManager(
+                host, port, user, password, database, log_sql, pool_size
+            )
+        return db_manager
+
+
+def close_connection_pool():
+    """关闭全局连接池"""
+    global db_manager
+
+    with _manager_lock:
+        if db_manager and db_manager.pool:
+            db_manager.pool.close()
+            db_manager = None
+            logger.info("全局数据库连接池已关闭")

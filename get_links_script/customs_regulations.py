@@ -73,7 +73,7 @@ async def get_links(is_incremental=False, max_pages=5):
     return prepare_links_result(filtered_links, is_incremental)
 
 
-async def crawl_page(all_links: list, max_pages=5):
+async def crawl_page(all_links: list, max_pages=3):
     """爬取多个页面的法规链接
 
     Args:
