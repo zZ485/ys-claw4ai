@@ -73,7 +73,9 @@
   "target": "shanghai_cross_border_association_news",
   "task_name": "采集上海跨境电商新闻",
   "is_incremental": 0,
-  "knowledge_base_name": "ecommerce_news",
+  "knowledge_base_name": "电商新闻知识库",
+  "knowledge_base_id": "kb_20231216_001",
+  "force_upload_by_id": false,
   "cleaning_config": {
     "source": 1,
     "image_source": 1,
@@ -87,6 +89,8 @@
 - `task_name`: 任务名称
 - `is_incremental`: 是否增量采集，1表示增量采集，0表示全量采集，默认为0
 - `knowledge_base_name`: 知识库名称
+- `knowledge_base_id`: 知识库ID（必须提供，用于唯一标识知识库）
+- `force_upload_by_id`: 是否强制使用ID上传且不检查一致性，true表示强制上传并不检查历史一致性，默认为false
 - `cleaning_config`: 清洗配置，JSON对象，包含以下字段：
   - `source`: 是否清洗来源信息，0表示不清洗，1表示清洗，默认为1
   - `image_source`: 是否清洗图源信息，0表示不清洗，1表示清洗，默认为1
@@ -102,7 +106,9 @@
     "target": "shanghai_cross_border_association_news",
     "task_name": "采集上海跨境电商新闻",
     "is_incremental": 0,
-    "knowledge_base_name": "ecommerce_news",
+    "knowledge_base_name": "电商新闻知识库",
+    "knowledge_base_id": "kb_20231216_001",
+    "force_upload_by_id": false,
     "cleaning_config": {
       "source": 1,
       "image_source": 1,
@@ -119,8 +125,17 @@
 - `task_name`: 任务名称
 - `is_incremental`: 是否增量采集
 - `knowledge_base_name`: 知识库名称
+- `knowledge_base_id`: 知识库ID
+- `force_upload_by_id`: 是否强制使用ID上传且不检查一致性
 - `cleaning_config`: 清洗配置，包含source、image_source和author字段
 - `file_name`: 结果文件名，与task_id相同
+
+### 特殊说明
+- `knowledge_base_id` 字段为必填项，用于唯一标识知识库
+- 当 `force_upload_by_id` 为 false 或未提供时，系统会对同一采集模板的历史任务进行知识库ID一致性检查，如果不一致会返回错误提示
+- 当 `force_upload_by_id` 为 true 时，系统不会检查历史一致性，直接使用提供的知识库ID进行上传
+- 文档上传时使用`knowledge_base_id`字段进行上传
+- 知识库ID不一致时会返回401错误码，包含上次使用的知识库名称和本次尝试使用的知识库名称信息
 
 ---
 
@@ -154,6 +169,14 @@
 }
 ```
 
+### 知识库ID不一致错误示例
+```json
+{
+  "code": 401,
+  "message": "该模板上次导入「电商新闻知识库」，本次导入「跨境电商知识库」，请确认！"
+}
+```
+
 ---
 
 ## 4. 获取任务列表
@@ -177,7 +200,7 @@
   "collection_template": "shanghai_cross_border_association_news",
   "task_type": 0,
   "task_status": "completed",
-  "knowledge_base_name": "ecommerce_news"
+  "knowledge_base_name": "电商新闻知识库"
 }
 ```
 
@@ -216,7 +239,8 @@
         "collection_template": "shanghai_cross_border_association_news",
         "task_type": 0,
         "task_status": "completed",
-        "knowledge_base_name": "ecommerce_news",
+        "knowledge_base_name": "电商新闻知识库",
+        "knowledge_base_id": "kb_20231216_001",
         "create_time": "2023-12-16 10:30:00",
         "start_time": "2023-12-16 10:30:05",
         "complete_time": "2023-12-16 10:35:20",
@@ -240,6 +264,7 @@
   - `task_type`: 任务类型（0-全量，1-增量）
   - `task_status`: 任务状态
   - `knowledge_base_name`: 知识库名称
+  - `knowledge_base_id`: 知识库ID
   - `create_time`: 创建时间
   - `start_time`: 开始时间
   - `complete_time`: 完成时间
@@ -343,6 +368,7 @@
 |--------|------|
 | 200 | 请求成功 |
 | 400 | 请求参数错误 |
+| 401 | 知识库不一致 |
 | 404 | 资源不存在 |
 | 500 | 服务器内部错误 |
 
@@ -365,7 +391,9 @@ curl -X POST "http://127.0.0.1:8000/collect" \
        "target": "shanghai_cross_border_association_news",
        "task_name": "采集上海跨境电商新闻",
        "is_incremental": 0,
-       "knowledge_base_name": "ecommerce_news",
+       "knowledge_base_name": "电商新闻知识库",
+       "knowledge_base_id": "kb_20231216_001",
+       "force_upload_by_id": false,
        "cleaning_config": {
          "source": 1,
          "image_source": 1,

@@ -329,10 +329,10 @@ class DatabaseManager:
             sql = """
             INSERT INTO collection_task (
                 task_id, task_name, task_status, collection_template, 
-                task_type, knowledge_base_name, failure_reason, 
+                task_type, knowledge_base_name, knowledge_base_id, failure_reason, 
                 create_time, complete_time, progress, total_links, 
                 success_count, error_count
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
 
             # 准备参数，确保类型正确
@@ -349,6 +349,7 @@ class DatabaseManager:
                     int(task_data.get("task_type", task_data.get("is_incremental", 0)))
                 ),  # 0-全量, 1-增量，转换为整数，优先使用task_type
                 task_data.get("knowledge_base_name", ""),  # 知识库名称
+                task_data.get("knowledge_base_id", ""),  # 知识库ID，默认空字符串
                 task_data.get("failure_reason"),  # 失败原因
                 task_data.get("create_time", datetime.now()),  # 创建时间
                 task_data.get("complete_time"),  # 完成时间
@@ -385,6 +386,7 @@ class DatabaseManager:
                 collection_template = ?,
                 task_type = ?,
                 knowledge_base_name = ?,
+                knowledge_base_id = ?, 
                 failure_reason = ?,
                 complete_time = ?,
                 progress = ?,
@@ -403,6 +405,7 @@ class DatabaseManager:
                     task_data.get("task_type", task_data.get("is_incremental", 0))
                 ),  # 转换为整数，优先使用task_type
                 task_data.get("knowledge_base_name", ""),
+                task_data.get("knowledge_base_id", ""),  # 知识库ID
                 task_data.get("failure_reason"),
                 task_data.get("complete_time"),
                 int(task_data.get("progress", 0)),
@@ -467,6 +470,8 @@ class DatabaseManager:
             "is_incremental": task_type == 1,  # 1-增量采集, 0-全量采集
             "knowledge_base_name": db_task.get("knowledge_base_name")
             or db_task.get("KNOWLEDGE_BASE_NAME"),
+            "knowledge_base_id": db_task.get("knowledge_base_id")
+            or db_task.get("KNOWLEDGE_BASE_ID", ""),  # 知识库ID
             "failure_reason": db_task.get("failure_reason")
             or db_task.get("FAILURE_REASON"),
             "create_time": (
@@ -742,6 +747,33 @@ class DatabaseManager:
             return None
         except Exception as e:
             logger.error(f"获取最新链接失败: {str(e)}")
+            logger.error(traceback.format_exc())
+            return None
+
+    async def get_latest_task_by_template(
+        self, collection_template: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        获取指定模板的最新任务
+
+        Args:
+            collection_template: 采集模板名称
+
+        Returns:
+            最新任务信息，如果不存在则返回None
+        """
+        try:
+            sql = """SELECT * FROM collection_task 
+                     WHERE collection_template = ? 
+                     ORDER BY create_time DESC 
+                     LIMIT 1"""
+            results = await self.execute_query(sql, (collection_template,))
+
+            if results:
+                return self._map_db_task_to_app(results[0])
+            return None
+        except Exception as e:
+            logger.error(f"获取最新任务失败: {str(e)}")
             logger.error(traceback.format_exc())
             return None
 

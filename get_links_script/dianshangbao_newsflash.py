@@ -319,11 +319,11 @@ async def main():
     # 配置选项
     use_proxy = False  # 是否使用代理
 
-    print("=== 商电报新闻快照爬虫 ===")
-    mode = "增量模式" if args.incremental else "全量模式"
-    print(f"爬取模式: {mode}")
-    print(f"使用代理: {'是' if use_proxy else '否'}")
-    print("开始爬取...")
+    # print("=== 商电报新闻快照爬虫 ===")
+    # mode = "增量模式" if args.incremental else "全量模式"
+    # print(f"爬取模式: {mode}")
+    # print(f"使用代理: {'是' if use_proxy else '否'}")
+    # print("开始爬取...")
 
     result = await get_links(use_proxy=use_proxy, is_incremental=args.incremental)
 
@@ -332,13 +332,13 @@ async def main():
     for i, link in enumerate(result["links"], 1):
         print(f"{i}. {link}")
 
-    # 可选：将结果保存到文件
-    save_to_file = input("\n是否将结果保存到文件? (y/n): ").lower() == "y"
-    if save_to_file:
-        filename = f"dianshangbao_links_{int(time.time())}.txt"
-        with open(filename, "w", encoding="utf-8") as f:
-            f.write("\n".join(result["links"]))
-        print(f"结果已保存到 {filename}")
+    # # 可选：将结果保存到文件
+    # save_to_file = input("\n是否将结果保存到文件? (y/n): ").lower() == "y"
+    # if save_to_file:
+    #     filename = f"dianshangbao_links_{int(time.time())}.txt"
+    #     with open(filename, "w", encoding="utf-8") as f:
+    #         f.write("\n".join(result["links"]))
+    #     print(f"结果已保存到 {filename}")
 
 
 if __name__ == "__main__":

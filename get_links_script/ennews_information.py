@@ -119,7 +119,7 @@ async def crawl_page(page_num: int, links_list: list):
         if result.success:
             links = extract_urls_from_markdown(result.markdown.fit_markdown)
             links_list.extend(links)
-            print(f"第 {page_num} 页提取到 {len(links)} 个链接")
+            # print(f"第 {page_num} 页提取到 {len(links)} 个链接")
         else:
             print(f"第 {page_num} 页爬取失败")
 

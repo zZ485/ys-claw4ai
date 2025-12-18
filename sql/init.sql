@@ -9,6 +9,7 @@ CREATE TABLE collection_task (
     collection_template VARCHAR(255) NOT NULL,
     task_type TINYINT NOT NULL CHECK (task_type IN (0, 1)),
     knowledge_base_name VARCHAR(255) NOT NULL,
+    knowledge_base_id VARCHAR(255) NOT NULL,
     failure_reason VARCHAR(1000),
     create_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
     complete_time TIMESTAMP,
@@ -37,6 +38,7 @@ COMMENT ON COLUMN collection_task.task_status IS '任务状态：pending/running
 COMMENT ON COLUMN collection_task.collection_template IS '采集模板名称（关联target配置）';
 COMMENT ON COLUMN collection_task.task_type IS '任务类型：0-增量采集，1-全量采集';
 COMMENT ON COLUMN collection_task.knowledge_base_name IS '知识库名称';
+COMMENT ON COLUMN collection_task.knowledge_base_id IS '知识库ID'; 
 COMMENT ON COLUMN collection_task.failure_reason IS '失败原因（仅当状态为failed时有效）';
 COMMENT ON COLUMN collection_task.create_time IS '任务创建时间';
 COMMENT ON COLUMN collection_task.complete_time IS '任务完成时间';

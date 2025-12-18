@@ -78,6 +78,8 @@ class CollectRequest(BaseModel):
     task_name: str  # 任务名称
     is_incremental: int = 0  # 是否增量，1表示增量采集，0表示全量采集
     knowledge_base_name: str  # 知识库名称
+    knowledge_base_id: str  # 知识库ID（必须提供）
+    force_upload_by_id: bool = False  # 是否强制使用ID上传且不检查一致性
     cleaning_config: dict = {
         "source": 1,  # 0表示关闭，1表示开启
         "image_source": 1,  # 0表示关闭，1表示开启
@@ -124,7 +126,7 @@ def build_response(code: int, message: str = "", data: dict = None):
 #         target_elements = None
 #         if request.target_config:
 #             # 使用预设配置
-#             target_elements = TargetElementsConfig.get_config(request.target_config)
+#         target_elements = TargetElementsConfig.get_config(request.target_config)
 #             if target_elements is None:
 #                 return build_response(
 #                     code=400,
@@ -180,75 +182,75 @@ class ReloadConfigRequest(BaseModel):
     config_type: str  # 配置类型：display_names, target_elements, path, logger 或 all
 
 
-@app.post("/reload_config")
-async def reload_config(request: ReloadConfigRequest):
-    """
-    统一的配置重新加载接口
+# @app.post("/reload_config")
+# async def reload_config(request: ReloadConfigRequest):
+#     """
+#     统一的配置重新加载接口
 
-    允许在运行时重新加载指定类型的配置，无需重启服务
+#     允许在运行时重新加载指定类型的配置，无需重启服务
 
-    参数:
-    - config_type: 配置类型
-      - "display_names": 显示名称配置
-      - "target_elements": 目标元素配置
-      - "path": 路径配置
-      - "logger": 日志配置
-      - "all": 重新加载所有配置
-    """
-    try:
-        results = {}
+#     参数:
+#     - config_type: 配置类型
+#       - "display_names": 显示名称配置
+#       - "target_elements": 目标元素配置
+#       - "path": 路径配置
+#       - "logger": 日志配置
+#       - "all": 重新加载所有配置
+#     """
+#     try:
+#         results = {}
 
-        # 根据配置类型决定重新加载哪些配置
-        if request.config_type in ["display_names", "all"]:
-            display_config = ConfigDisplayNames.reload_config()
-            results["display_names"] = {"success": True, "count": len(display_config)}
+#         # 根据配置类型决定重新加载哪些配置
+#         if request.config_type in ["display_names", "all"]:
+#             display_config = ConfigDisplayNames.reload_config()
+#             results["display_names"] = {"success": True, "count": len(display_config)}
 
-        if request.config_type in ["target_elements", "all"]:
-            target_config = TargetElementsConfig.reload_config()
-            results["target_elements"] = {"success": True, "count": len(target_config)}
+#         if request.config_type in ["target_elements", "all"]:
+#             target_config = TargetElementsConfig.reload_config()
+#             results["target_elements"] = {"success": True, "count": len(target_config)}
 
-        if request.config_type in ["path", "all"]:
-            path_config = PathConfig.reload_config()
-            results["path"] = {"success": True, "config_keys": list(path_config.keys())}
+#         if request.config_type in ["path", "all"]:
+#             path_config = PathConfig.reload_config()
+#             results["path"] = {"success": True, "config_keys": list(path_config.keys())}
 
-        if request.config_type in ["logger", "all"]:
-            logger_config = LoggerConfig.reload_config()
-            results["logger"] = {
-                "success": True,
-                "config_keys": list(logger_config.keys()),
-            }
+#         if request.config_type in ["logger", "all"]:
+#             logger_config = LoggerConfig.reload_config()
+#             results["logger"] = {
+#                 "success": True,
+#                 "config_keys": list(logger_config.keys()),
+#             }
 
-        if request.config_type in ["crawler_params", "all"]:
-            crawler_params = crawler_params_config.reload_config()
-            results["crawler_params"] = {
-                "success": True,
-                "chunk_size": crawler_params.get("crawler_config", {}).get(
-                    "chunk_size", 8
-                ),
-            }
+#         if request.config_type in ["crawler_params", "all"]:
+#             crawler_params = crawler_params_config.reload_config()
+#             results["crawler_params"] = {
+#                 "success": True,
+#                 "chunk_size": crawler_params.get("crawler_config", {}).get(
+#                     "chunk_size", 8
+#                 ),
+#             }
 
-        # 检查配置类型是否有效
-        if request.config_type not in [
-            "display_names",
-            "target_elements",
-            "path",
-            "logger",
-            "crawler_params",
-            "all",
-        ]:
-            return build_response(
-                code=400,
-                message=f"无效的配置类型: {request.config_type}。支持的类型: display_names, target_elements, path, logger, crawler_params, all",
-            )
+#         # 检查配置类型是否有效
+#         if request.config_type not in [
+#             "display_names",
+#             "target_elements",
+#             "path",
+#             "logger",
+#             "crawler_params",
+#             "all",
+#         ]:
+#             return build_response(
+#                 code=400,
+#                 message=f"无效的配置类型: {request.config_type}。支持的类型: display_names, target_elements, path, logger, crawler_params, all",
+#             )
 
-        return build_response(
-            code=200,
-            message="配置重新加载成功",
-            data={"config_type": request.config_type, "results": results},
-        )
+#         return build_response(
+#             code=200,
+#             message="配置重新加载成功",
+#             data={"config_type": request.config_type, "results": results},
+#         )
 
-    except Exception as e:
-        return build_response(code=500, message=f"重新加载配置失败: {str(e)}")
+#     except Exception as e:
+#         return build_response(code=500, message=f"重新加载配置失败: {str(e)}")
 
 
 @app.post("/collect")
@@ -257,10 +259,49 @@ async def collect_data(request: CollectRequest):
     采集数据接口：创建异步采集任务，立即返回任务ID
     """
     logger.info(
-        f"收到数据采集请求: target={request.target}, task_name={request.task_name}, is_incremental={request.is_incremental}, knowledge_base_name={request.knowledge_base_name}"
+        f"收到数据采集请求: target={request.target}, task_name={request.task_name}, is_incremental={request.is_incremental}, knowledge_base_name={request.knowledge_base_name}, knowledge_base_id={request.knowledge_base_id}, force_upload_by_id={request.force_upload_by_id}"
     )
 
     try:
+        # 检查knowledge_base_id是否为空
+        if not request.knowledge_base_id or not request.knowledge_base_id.strip():
+            return build_response(code=400, message="knowledge_base_id不能为空")
+
+        # 知识库一致性检查（除非强制上传）
+        if not request.force_upload_by_id:
+            # 如果提供了知识库ID，则需要检查与之前任务的一致性
+            try:
+                from utils.db_manager import get_db_manager
+
+                db_config = get_db_config()
+                db_manager = get_db_manager(
+                    host=db_config.get("host", "localhost"),
+                    port=db_config.get("port", 5236),
+                    user=db_config.get("user", ""),
+                    password=db_config.get("password", ""),
+                    database=db_config.get("database", ""),
+                    log_sql=db_config.get("log_sql", False),
+                )
+
+                # 获取该模板最近一次任务
+                latest_task = await db_manager.get_latest_task_by_template(
+                    request.target
+                )
+                if latest_task and latest_task.get("knowledge_base_id"):
+                    # 检查知识库ID是否一致
+                    if latest_task["knowledge_base_id"] != request.knowledge_base_id:
+                        # 使用知识库名称而不是ID显示错误信息
+                        old_kb_name = latest_task.get(
+                            "knowledge_base_name", "未知知识库"
+                        )
+                        new_kb_name = request.knowledge_base_name or "未知知识库"
+                        error_msg = f"该模板上次导入「{old_kb_name}」，本次导入「{new_kb_name}」，请确认！"
+                        logger.warning(f"知识库ID不一致: {error_msg}")
+                        return build_response(code=401, message=error_msg)
+            except Exception as e:
+                logger.error(f"检查知识库一致性时发生错误: {str(e)}")
+                # 发生错误时不阻止任务创建，仅记录日志
+
         # 获取数据库配置
         try:
             db_config = get_db_config()
@@ -276,6 +317,7 @@ async def collect_data(request: CollectRequest):
             is_incremental=request.is_incremental,
             db_config=db_config,
             knowledge_base_name=request.knowledge_base_name,
+            knowledge_base_id=request.knowledge_base_id,
             cleaning_config=request.cleaning_config,
         )
 
@@ -293,8 +335,10 @@ async def collect_data(request: CollectRequest):
                 "task_name": request.task_name,
                 "is_incremental": request.is_incremental,
                 "knowledge_base_name": request.knowledge_base_name,
+                "knowledge_base_id": request.knowledge_base_id,
+                "force_upload_by_id": request.force_upload_by_id,
                 "cleaning_config": request.cleaning_config,
-                "file_name": task_id,  # 返回实际使用的文件名（task_id）
+                "file_name": task_id,
             },
         )
 
@@ -655,7 +699,7 @@ if __name__ == "__main__":
     try:
         # 启动服务器 - 单线程模式
         uvicorn.run(
-            app, host="192.168.4.194", port=8001, log_level="info"  # 直接传递app实例
+            app, host="127.0.0.1", port=8001, log_level="info"  # 直接传递app实例
         )
     except Exception as e:
         logger.error(f"服务器运行异常: {str(e)}")

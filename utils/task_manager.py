@@ -12,8 +12,11 @@ from typing import Any, Dict, List, Optional
 from config.crawler_params_config import crawler_params_config
 from config.logger_config import LoggerConfig
 from config.target_elements_config import TargetElementsConfig
+from config.path_config import default_path_config
+from config.knowledge_base_config import KnowledgeBaseConfig
 from utils.crawler_utils import crawl_urls
 from utils.db_manager import get_db_manager
+from utils.knowledge_base_uploader import upload_document_to_knowledge_base
 
 logger = LoggerConfig.get_logger(__name__)
 
@@ -34,10 +37,11 @@ class Task:
     def __init__(
         self,
         task_id: str,
-        collection_template: str,  # 使用collection_template字段存储内部数据
+        collection_template: str,
         task_name: str,
         is_incremental: int,
         knowledge_base_name: str = "",
+        knowledge_base_id: str = "",
         cleaning_config: dict = {
             "source": 1,  # 0表示关闭，1表示开启
             "image_source": 1,  # 0表示关闭，1表示开启
@@ -49,16 +53,17 @@ class Task:
         self.task_name = task_name
         self.is_incremental = is_incremental  # 0-全量采集, 1-增量采集
         self.knowledge_base_name = knowledge_base_name
+        self.knowledge_base_id = knowledge_base_id  # 知识库ID
         self.cleaning_config = cleaning_config  # 清洗配置
-        self.enable_cleaning = 1  # 保留此字段以兼容已有代码，始终为1表示开启清洗
-        self.file_name = task_id  # 保持原有逻辑：file_name 使用 task_id
+        self.enable_cleaning = 1
+        self.file_name = task_id
         self.batch_size: int = 10  # 将根据链接数量动态调整
         self.flush_interval: int = 30  # 将根据链接数量动态调整
         self.status = TaskStatus.PENDING
         self.created_at = datetime.now()
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
-        self.failure_reason: Optional[str] = None  # 使用failure_reason替代error_message
+        self.failure_reason: Optional[str] = None
         self.success_count: int = 0
         self.error_count: int = 0
         self.total_links: int = 0
@@ -72,10 +77,11 @@ class Task:
             "collection_template": self.collection_template,
             "task_name": self.task_name,
             "task_type": self.is_incremental,  # 0-全量, 1-增量
-            "is_incremental": self.is_incremental,  # 保留原始字段，确保兼容性
+            "is_incremental": self.is_incremental,
             "knowledge_base_name": self.knowledge_base_name,
-            "enable_cleaning": self.enable_cleaning,  # 是否开启清洗（保留字段以兼容）
-            "cleaning_config": self.cleaning_config,  # 清洗配置
+            "knowledge_base_id": self.knowledge_base_id,
+            "enable_cleaning": self.enable_cleaning,
+            "cleaning_config": self.cleaning_config,
             "task_status": status_value,
             "failure_reason": self.failure_reason,
             "create_time": self.created_at,
@@ -127,10 +133,11 @@ class TaskManager:
 
     async def create_task(
         self,
-        target: str,  # 保留原始参数名以保持API兼容性
+        target: str,
         task_name: str,
         is_incremental: int,
         knowledge_base_name: str = "",
+        knowledge_base_id: str = "",
         cleaning_config: dict = {
             "source": 1,  # 0表示关闭，1表示开启
             "image_source": 1,  # 0表示关闭，1表示开启
@@ -146,6 +153,7 @@ class TaskManager:
             task_name: 任务名称
             is_incremental: 任务类型，1表示增量采集，0表示全量采集
             knowledge_base_name: 知识库名称
+            knowledge_base_id: 知识库ID
             cleaning_config: 清洗配置，格式为 {"source": 0/1, "image_source": 0/1, "author": 0/1}
             db_config: 数据库配置信息（可选，如果提供则初始化数据库连接）
 
@@ -180,13 +188,13 @@ class TaskManager:
         random_str = "".join(random.choices(string.ascii_letters, k=4))
         task_id = f"{time_str}{random_str}"
 
-        # 创建任务，内部使用collection_template字段
         task = Task(
             task_id=task_id,
-            collection_template=target,  # 内部使用新字段名
+            collection_template=target,
             task_name=task_name,
             is_incremental=is_incremental,
             knowledge_base_name=knowledge_base_name,
+            knowledge_base_id=knowledge_base_id,
             cleaning_config=cleaning_config,
         )
         self.tasks[task_id] = task
@@ -207,7 +215,8 @@ class TaskManager:
             f"collection_template: {target}, "
             f"task_name={task_name}, "
             f"is_incremental={is_incremental}, "
-            f"knowledge_base_name={knowledge_base_name}"
+            f"knowledge_base_name={knowledge_base_name}, "
+            f"knowledge_base_id={knowledge_base_id}"
         )
 
         # 如果没有任务在执行，则启动队列处理
@@ -377,7 +386,6 @@ class TaskManager:
                 f"links_count={links_count}"
             )
 
-            # 更新任务状态（包含新字段）
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())
 
@@ -401,10 +409,7 @@ class TaskManager:
                             self.db_manager.update_task(task.task_id, task.to_dict())
                         )
 
-            # 根据enable_cleaning决定是否传递target_elements
-            target_elements = (
-                configs[task.collection_template] if task.enable_cleaning == 1 else None
-            )
+            target_elements = configs[task.collection_template]
 
             # 从配置中获取内存优化阈值
             memory_optimization_threshold = memory_settings.get(
@@ -444,12 +449,19 @@ class TaskManager:
                 f"文件保存为: {task.file_name}.txt"
             )
 
+            if (
+                task.knowledge_base_name
+                and task.knowledge_base_name.strip()
+                and KnowledgeBaseConfig.is_auto_upload_enabled()
+            ):
+                await self._upload_to_knowledge_base(task, task_logger)
+
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())
 
         except Exception as e:
             task.status = TaskStatus.FAILED
-            task.failure_reason = str(e)  # 使用failure_reason
+            task.failure_reason = str(e)
             task.completed_at = datetime.now()
 
             # 获取任务日志记录器（如果存在）
@@ -660,6 +672,69 @@ class TaskManager:
     #         return True
 
     #     return False
+
+    async def _upload_to_knowledge_base(self, task, task_logger):
+        """
+        将采集完成的文档上传到知识库
+
+        Args:
+            task: 任务对象
+            task_logger: 任务日志记录器
+        """
+        try:
+            # 获取文件路径
+            file_name = f"{task.file_name}.txt"
+            file_path = default_path_config.get_output_file_path(file_name)
+
+            # 检查文件是否存在
+            if not os.path.exists(file_path):
+                error_msg = f"要上传的文件不存在: {file_path}"
+                logger.error(error_msg)
+                task_logger.error(error_msg)
+                task.failure_reason = f"上传到知识库失败: {error_msg}"
+                task.status = TaskStatus.FAILED
+                return
+
+            dataset_id = task.knowledge_base_id
+
+            # 检查dataset_id是否为空
+            if not dataset_id or not dataset_id.strip():
+                error_msg = "知识库ID或名称不能为空"
+                logger.error(error_msg)
+                task_logger.error(error_msg)
+                task.failure_reason = f"上传到知识库失败: {error_msg}"
+                return
+
+            # 从配置获取知识库API地址和超时设置
+            api_base_url = KnowledgeBaseConfig.get_api_base_url()
+            upload_timeout = KnowledgeBaseConfig.get_upload_timeout()
+
+            logger.info(f"开始上传文档 {file_name} 到知识库 {dataset_id}")
+            task_logger.info(f"开始上传文档到知识库: {dataset_id}")
+
+            # 调用上传函数，使用知识库ID字段
+            upload_result = await upload_document_to_knowledge_base(
+                file_path=file_path,
+                dataset_id=dataset_id,  # 使用知识库ID
+                api_base_url=api_base_url,
+                timeout=upload_timeout,
+            )
+
+            if upload_result["success"]:
+                logger.info(f"文档上传成功: {file_name} -> {dataset_id}")
+                task_logger.info(f"文档上传到知识库成功: {dataset_id}")
+            else:
+                error_msg = f"上传到知识库失败: {upload_result['error']}"
+                logger.error(error_msg)
+                task_logger.error(error_msg)
+                # 注意：这里不修改任务状态为失败，因为采集已经成功完成
+                # 只记录错误信息，避免因上传失败导致整个任务失败
+
+        except Exception as e:
+            error_msg = f"上传文档到知识库时发生异常: {str(e)}"
+            logger.error(error_msg)
+            task_logger.error(error_msg)
+            # 同样，只记录错误，不修改任务状态
 
     async def disconnect_db(self):
         """断开数据库连接"""
