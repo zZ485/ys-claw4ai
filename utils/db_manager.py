@@ -779,7 +779,7 @@ class DatabaseManager:
             包含分页信息和任务列表的字典
         """
         try:
-            if not self._connected:
+            if not await self.is_connected():
                 await self.connect()
 
             # 如果没有提供查询条件，初始化为空字典
