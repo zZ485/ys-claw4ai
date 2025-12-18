@@ -1,27 +1,27 @@
 {
   "crawler_config": {
-    "chunk_size": 8,
+    "chunk_size": 4,
     "concurrency_settings": {
       "max_crawlers_by_url_count": [
         {
           "max_urls": 50,
-          "max_crawlers": 2
+          "max_crawlers": 1
         },
         {
           "max_urls": 200,
-          "max_crawlers": 4
+          "max_crawlers": 2
         },
         {
           "max_urls": 500,
-          "max_crawlers": 6
+          "max_crawlers": 3
         },
         {
           "max_urls": 5000,
-          "max_crawlers": 8
+          "max_crawlers": 4
         },
         {
           "max_urls": 999999,
-          "max_crawlers": 4
+          "max_crawlers": 3
         }
       ]
     },
@@ -80,8 +80,8 @@
       "log_success_threshold": 100
     },
     "memory_settings": {
-      "memory_optimization_threshold": 1000,
-      "max_buffer_size_ratio": 0.1
+      "memory_optimization_threshold": 500,
+      "max_buffer_size_ratio": 0.05
     }
   }
 }

@@ -147,6 +147,11 @@ async def crawl_urls(
     crawled_count = 0
     errors = []
     completed_count = 0
+    # 连续空白内容计数器
+    consecutive_empty_count = 0
+    max_consecutive_empty = 10
+    # 全局停止标志
+    should_stop = False
 
     # 使用传入的内存优化阈值
     should_store_all_data = len(urls) <= memory_optimization_threshold
@@ -178,7 +183,12 @@ async def crawl_urls(
 
     async def process_chunk(chunk, chunk_index):
         """处理一个URL块"""
-        nonlocal completed_count, crawled_count
+        nonlocal completed_count, crawled_count, consecutive_empty_count, should_stop
+
+        # 检查是否应该停止处理
+        if should_stop:
+            logger.info(f"检测到停止标志，跳过处理第 {chunk_index + 1} 组URL")
+            return
 
         async with semaphore:
             logger.info(
@@ -187,6 +197,13 @@ async def crawl_urls(
             chunk_start_time = datetime.now()
 
             try:
+                # 再次检查是否应该停止处理
+                if should_stop:
+                    logger.info(
+                        f"检测到停止标志，跳过创建爬虫实例处理第 {chunk_index + 1} 组URL"
+                    )
+                    return
+
                 # 创建爬虫实例并处理这组URL
                 async with AsyncWebCrawler(config=DEFAULT_BROWSER_CONFIG) as crawler:
                     try:
@@ -205,28 +222,74 @@ async def crawl_urls(
 
                                 # 检查内容是否为空，如果为空则视为失败
                                 if not fit_markdown or len(fit_markdown.strip()) <= 0:
+                                    consecutive_empty_count += 1
                                     error_data = {
                                         "url": result.url,
                                         "error": "爬取内容为空",
                                     }
                                     errors.append(error_data)
                                     logger.warning(
-                                        f"URL爬取失败（内容为空）: {result.url}"
+                                        f"URL爬取失败（内容为空）: {result.url}, 连续空白次数: {consecutive_empty_count}"
                                     )
+
+                                    # 检查是否超过最大连续空白次数
+                                    if consecutive_empty_count >= max_consecutive_empty:
+                                        error_data = {
+                                            "url": "系统",
+                                            "error": f"连续{consecutive_empty_count}次获取到空白内容，页面结构可能发生变化，无法获取内容",
+                                        }
+                                        errors.append(error_data)
+                                        logger.error(
+                                            f"连续{consecutive_empty_count}次获取到空白内容，结束爬取任务"
+                                        )
+                                        # 设置停止标志
+                                        should_stop = True
+                                        return
                                 else:
                                     data = {"url": result.url, "content": fit_markdown}
 
-                                    # 使用批量写入器写入数据
-                                    if batch_writer:
-                                        await batch_writer.add(data)
+                                    # 检查内容长度，如果内容小于等于50个字符则视为无效
+                                    if len(fit_markdown.strip()) <= 50:
+                                        consecutive_empty_count += 1
+                                        error_data = {
+                                            "url": result.url,
+                                            "error": "内容长度不足50个字符",
+                                        }
+                                        errors.append(error_data)
+                                        logger.warning(
+                                            f"URL爬取失败（内容不足50个字符）: {result.url}, 内容长度: {len(fit_markdown.strip())}, 连续空白次数: {consecutive_empty_count}"
+                                        )
 
-                                    # 仅在需要时将数据添加到内存列表
-                                    if should_store_all_data:
-                                        crawled_data.append(data)
+                                        # 检查是否超过最大连续空白次数
+                                        if (
+                                            consecutive_empty_count
+                                            >= max_consecutive_empty
+                                        ):
+                                            error_data = {
+                                                "url": "系统",
+                                                "error": f"连续{consecutive_empty_count}次获取到无效内容，页面结构可能发生变化，无法获取内容",
+                                            }
+                                            errors.append(error_data)
+                                            logger.error(
+                                                f"连续{consecutive_empty_count}次获取到无效内容，结束爬取任务"
+                                            )
+                                            # 设置停止标志
+                                            should_stop = True
+                                            return
+                                    else:
+                                        # 内容有效，重置连续空白计数器
+                                        consecutive_empty_count = 0
+                                        # 使用批量写入器写入数据
+                                        if batch_writer:
+                                            await batch_writer.add(data)
 
-                                    # 增加成功计数器
-                                    crawled_count += 1
-                                    # logger.info(f"URL爬取成功: {result.url}, 内容长度: {len(fit_markdown) if fit_markdown else 0}")
+                                        # 仅在需要时将数据添加到内存列表
+                                        if should_store_all_data:
+                                            crawled_data.append(data)
+
+                                        # 增加成功计数器
+                                        crawled_count += 1
+                                        # logger.info(f"URL爬取成功: {result.url}, 内容长度: {len(fit_markdown) if fit_markdown else 0}")
                             else:
                                 error_data = {
                                     "url": result.url,
