@@ -54,22 +54,34 @@ class BatchWriter:
             item: 要添加的数据项，包含url和content
         """
         if self._closed:
-            logger.warning("批量写入器已关闭，无法添加新数据")
+            # 不再警告，因为可能在任务取消时会发生
+            # logger.debug("批量写入器已关闭，无法添加新数据")
             return
 
-        async with self._lock:
-            self.buffer.append(item)
-            logger.debug(f"添加数据到缓冲区，当前缓冲区大小: {len(self.buffer)}")
+        try:
+            async with self._lock:
+                self.buffer.append(item)
+                logger.debug(f"添加数据到缓冲区，当前缓冲区大小: {len(self.buffer)}")
 
-            # 如果达到批量写入大小或缓冲区最大限制，立即写入
-            if (
-                len(self.buffer) >= self.batch_size
-                or len(self.buffer) >= self.max_buffer_size
-            ):
-                await self._flush_buffer()
-            # 如果这是第一个元素，启动定期写入任务
-            elif len(self.buffer) == 1 and self._flush_task is None:
-                self._flush_task = asyncio.create_task(self._periodic_flush())
+                # 如果达到批量写入大小或缓冲区最大限制，立即写入
+                if (
+                    len(self.buffer) >= self.batch_size
+                    or len(self.buffer) >= self.max_buffer_size
+                ):
+                    await self._flush_buffer()
+                # 如果这是第一个元素，启动定期写入任务
+                elif len(self.buffer) == 1 and self._flush_task is None:
+                    self._flush_task = asyncio.create_task(self._periodic_flush())
+        except asyncio.CancelledError:
+            # 处理取消，尝试刷新已有数据
+            logger.debug("批量写入器添加数据时被取消")
+            try:
+                async with self._lock:
+                    await self._flush_buffer()
+            except Exception as e:
+                logger.warning(f"在取消添加任务时刷新缓冲区失败: {str(e)}")
+        except Exception as e:
+            logger.error(f"添加数据到批量写入器失败: {str(e)}")
 
     async def _flush_buffer(self):
         """
@@ -87,6 +99,11 @@ class BatchWriter:
             # 写入文件
             await self._write_to_file(items_to_write)
             # logger.info(f"批量写入完成: {len(items_to_write)} 条数据已写入文件 {self.file_name}")
+        except asyncio.CancelledError:
+            # 处理取消，将数据重新放回缓冲区
+            self.buffer = items_to_write + self.buffer
+            logger.debug("批量写入被取消，数据已重新放回缓冲区")
+            raise
         except Exception as e:
             # 如果写入失败，将数据重新放回缓冲区
             self.buffer = items_to_write + self.buffer
@@ -137,6 +154,12 @@ class BatchWriter:
                         await self._flush_buffer()
             except asyncio.CancelledError:
                 # 任务被取消，正常退出
+                # 在退出前尝试刷新剩余数据
+                try:
+                    async with self._lock:
+                        await self._flush_buffer()
+                except Exception as e:
+                    logger.warning(f"在取消任务时刷新缓冲区失败: {str(e)}")
                 break
             except Exception as e:
                 logger.error(f"定期刷新任务异常: {str(e)}")
@@ -160,10 +183,14 @@ class BatchWriter:
             try:
                 await self._flush_task
             except asyncio.CancelledError:
-                pass
+                logger.debug("定期刷新任务已取消")
 
         # 刷新剩余数据
-        await self.flush()
+        try:
+            await self.flush()
+        except Exception as e:
+            logger.warning(f"关闭时刷新剩余数据失败: {str(e)}")
+
         logger.info(f"批量写入器已关闭，所有数据已刷新到文件 {self.file_name}")
 
 

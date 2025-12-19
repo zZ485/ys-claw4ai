@@ -240,7 +240,10 @@ class TaskManager:
         self.is_task_running = True
         # logger.info("开始处理任务队列")
 
-        while self.task_queue:
+        # 检查是否应该停止处理任务
+        shutdown_requested = False
+
+        while self.task_queue and not shutdown_requested:
             task_id = self.task_queue.pop(0)
             task = self.tasks.get(task_id)
 
@@ -252,10 +255,56 @@ class TaskManager:
                 logger.warning(f"任务 {task_id} 状态不是 PENDING，跳过执行")
                 continue
 
-            await self._execute_task(task)
+            try:
+                await self._execute_task(task)
+            except asyncio.CancelledError:
+                logger.info("任务队列处理被取消")
+                shutdown_requested = True
+                # 标记剩余任务为已取消
+                for remaining_id in self.task_queue:
+                    if remaining_id in self.tasks:
+                        remaining_task = self.tasks[remaining_id]
+                        remaining_task.status = TaskStatus.CANCELLED
+                        remaining_task.failure_reason = "服务器关闭，任务被取消"
+                        remaining_task.completed_at = datetime.now()
+                        logger.info(f"任务 {remaining_id} 已被标记为取消")
+
+                        # 尝试更新数据库，但不阻止关闭流程
+                        try:
+                            if self.db_manager:
+                                await self.db_manager.update_task(
+                                    remaining_id, remaining_task.to_dict()
+                                )
+                        except Exception as e:
+                            logger.warning(
+                                f"更新取消任务 {remaining_id} 到数据库失败: {str(e)}"
+                            )
+                break
 
         self.is_task_running = False
         # logger.info("任务队列处理完毕")
+
+    async def disconnect_db(self):
+        """断开数据库连接"""
+        try:
+            if self.db_manager:
+                logger.info("任务管理器数据库连接管理器已断开")
+                # 关闭所有正在运行的任务（只标记状态，不进行数据库更新）
+                for task_id, task in self.tasks.items():
+                    if task.status == TaskStatus.RUNNING:
+                        task.status = TaskStatus.CANCELLED
+                        task.failure_reason = "服务器关闭，任务被取消"
+                        task.completed_at = datetime.now()
+                        logger.info(f"任务 {task_id} 已被标记为取消")
+
+                # 断开数据库连接（不调用disconnect方法，直接将引用设为None）
+                # 数据库连接池会在全局清理函数中关闭
+                self.db_manager = None
+                logger.info("任务管理器数据库连接已关闭")
+            else:
+                logger.info("任务管理器没有活跃的数据库连接")
+        except Exception as e:
+            logger.error(f"断开任务管理器数据库连接时出错: {str(e)}")
 
     async def _execute_task(self, task: Task):
         """在后台执行任务"""
@@ -356,14 +405,14 @@ class TaskManager:
                     f"脚本 {script_name} 返回了空的链接列表 可能原因：1.获取链接脚本失效 2.增量模式下无新增文章链接"
                 )
 
-            # 保存最新链接
-            if links and self.db_manager:
-                try:
-                    await self.db_manager.save_latest_link(
-                        task.collection_template, links[0]
-                    )
-                except Exception as e:
-                    logger.error(f"保存最新链接失败: {str(e)}")
+            # # 保存最新链接
+            # if links and self.db_manager:
+            #     try:
+            #         await self.db_manager.save_latest_link(
+            #             task.collection_template, links[0]
+            #         )
+            #     except Exception as e:
+            #         logger.error(f"保存最新链接失败: {str(e)}")
 
             # 动态设置任务参数
             links_count = len(links)
@@ -424,16 +473,35 @@ class TaskManager:
             )
 
             task_logger.info(f"开始爬取 {len(links)} 个链接")
-            result = await crawl_urls(
-                urls=links,
-                target_elements=target_elements,
-                file_name=task.file_name,  # 保持原有逻辑，使用file_name
-                batch_size=task.batch_size,
-                flush_interval=task.flush_interval,
-                progress_callback=progress_callback,
-                memory_optimization_threshold=memory_optimization_threshold,  # 使用配置中的内存优化阈值
-                cleaning_config=task.cleaning_config,  # 传递清洗配置
-            )
+            try:
+                result = await crawl_urls(
+                    urls=links,
+                    target_elements=target_elements,
+                    file_name=task.file_name,  # 保持原有逻辑，使用file_name
+                    batch_size=task.batch_size,
+                    flush_interval=task.flush_interval,
+                    progress_callback=progress_callback,
+                    memory_optimization_threshold=memory_optimization_threshold,  # 使用配置中的内存优化阈值
+                    cleaning_config=task.cleaning_config,  # 传递清洗配置
+                )
+            except asyncio.CancelledError:
+                logger.info(f"任务 {task.task_id} 被取消")
+                task_logger.info("任务被取消")
+                task.status = TaskStatus.CANCELLED
+                task.failure_reason = "任务被取消"
+                task.completed_at = datetime.now()
+
+                # 尝试更新数据库，但不阻止任务取消流程
+                try:
+                    if self.db_manager:
+                        await self.db_manager.update_task(task.task_id, task.to_dict())
+                except Exception as e:
+                    logger.warning(
+                        f"更新取消任务 {task.task_id} 到数据库失败: {str(e)}"
+                    )
+                    task_logger.warning(f"更新取消任务到数据库失败: {str(e)}")
+
+                return
 
             # 更新任务结果
             task.progress = progress_after_crawl
@@ -476,6 +544,26 @@ class TaskManager:
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())
 
+        except asyncio.CancelledError:
+            # 处理异步取消
+            logger.info(f"任务 {task.task_id} 被取消")
+            task.status = TaskStatus.CANCELLED
+            task.failure_reason = "任务被取消"
+            task.completed_at = datetime.now()
+
+            try:
+                task_logger = LoggerConfig.get_logger(f"task_{task.task_id}")
+                task_logger.info("任务被取消")
+            except:
+                pass
+
+            if self.db_manager:
+                try:
+                    await self.db_manager.update_task(task.task_id, task.to_dict())
+                except Exception as e:
+                    logger.warning(
+                        f"更新取消任务 {task.task_id} 到数据库失败: {str(e)}"
+                    )
         except Exception as e:
             task.status = TaskStatus.FAILED
             task.failure_reason = str(e)

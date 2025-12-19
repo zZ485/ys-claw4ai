@@ -326,6 +326,10 @@ class ConnectionPool:
 
         logger.info("数据库连接池已关闭")
 
+    async def disconnect(self):
+        """断开数据库连接（异步版本）"""
+        self.close()
+
 
 class DatabaseManager:
     """达梦数据库管理器"""
@@ -999,7 +1003,7 @@ class DatabaseManager:
 
             if results:
                 url = results[0].get("url")
-                logger.info(f"从数据库获取到最新链接: {collection_template} -> {url}")
+                # logger.info(f"从数据库获取到最新链接: {collection_template} -> {url}")
                 return url
             return None
         except Exception as e:

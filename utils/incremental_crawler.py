@@ -109,10 +109,10 @@ def filter_links_incrementally(
         index = links.index(latest_link)
         # 返回最新链接之前的所有链接（不包括最新链接）
         filtered_links = links[:index]
-        logger.info(f"增量爬取：找到最新链接，返回 {len(filtered_links)} 个新链接")
+        # logger.info(f"增量爬取：找到最新链接，返回 {len(filtered_links)} 个新链接")
         return filtered_links
     else:
-        logger.warning(f"最新链接不在当前链接列表中，返回所有链接")
+        # logger.warning(f"最新链接不在当前链接列表中，返回所有链接")
         return links
 
 
@@ -140,13 +140,13 @@ async def filter_links_for_crawl(
         return links
 
     # 增量模式，需要过滤链接
-    logger.info("增量模式：正在过滤链接")
+    # logger.info("增量模式：正在过滤链接")
 
     # 从数据库获取最新链接
     latest_link = await get_latest_link_from_db(template_name, db_manager)
 
     if not latest_link:
-        logger.info("未找到最新链接，返回所有链接")
+        # logger.info("未找到最新链接，返回所有链接")
         return links
 
     # 过滤链接

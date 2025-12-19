@@ -53,38 +53,6 @@ async def build_crawler_config(target_elements):
     return CrawlerRunConfig(**run_config_kwargs)
 
 
-# async def crawl_single_url_async(url, run_config, batch_writer=None):
-# try:
-#     # 为每个URL创建独立的AsyncWebCrawler实例，避免并发冲突
-#     async with AsyncWebCrawler(config=DEFAULT_BROWSER_CONFIG) as crawler:
-#         result = await crawler.arun(url=url, config=run_config)
-#
-#         if result.success:
-#             fit_markdown = getattr(result.markdown, 'fit_markdown', None) or result.markdown
-#             data = {
-#                 "url": url,
-#                 "content": fit_markdown
-#             }
-#
-#             # 使用批量写入器写入数据（如果提供了batch_writer）
-#             if batch_writer:
-#                 await batch_writer.add(data)
-#
-#             return True, data
-#         else:
-#             error_data = {
-#                 "url": url,
-#                 "error": result.error_message or '未知错误'
-#             }
-#             return False, error_data
-# except Exception as e:
-#     error_data = {
-#         "url": url,
-#         "error": str(e)
-#     }
-#     return False, error_data
-
-
 async def crawl_urls(
     urls,
     target_elements=None,
@@ -165,7 +133,6 @@ async def crawl_urls(
             f"URL数量({len(urls)})超过阈值({memory_optimization_threshold})，启用内存优化模式，不会在内存中保存所有爬取数据"
         )
 
-    # 创建信号量限制并发爬虫实例数
     # 根据URL数量动态设置并发爬虫实例的数量
     urls_count = len(urls)
     max_crawlers = crawler_params_config.get_max_crawlers(urls_count)
@@ -181,8 +148,10 @@ async def crawl_urls(
     semaphore = asyncio.Semaphore(max_crawlers)
     logger.info(f"设置最大并发爬虫实例数: {max_crawlers}, 总URL组数: {len(url_chunks)}")
 
+    logger.info(f"准备使用上下文管理器模式创建爬虫实例，最大并发数: {max_crawlers}")
+
     async def process_chunk(chunk, chunk_index):
-        """处理一个URL块"""
+        """处理一个URL块，为每个块创建独立的爬虫实例"""
         nonlocal completed_count, crawled_count, consecutive_empty_count, should_stop
 
         # 检查是否应该停止处理
@@ -191,9 +160,9 @@ async def crawl_urls(
             return
 
         async with semaphore:
-            logger.info(
-                f"开始处理第 {chunk_index + 1}/{len(url_chunks)} 组URL，包含 {len(chunk)} 个URL"
-            )
+            # logger.info(
+            #     f"开始处理第 {chunk_index + 1}/{len(url_chunks)} 组URL，包含 {len(chunk)} 个URL"
+            # )
             chunk_start_time = datetime.now()
 
             try:
@@ -204,8 +173,10 @@ async def crawl_urls(
                     )
                     return
 
-                # 创建爬虫实例并处理这组URL
+                # 使用上下文管理器创建爬虫实例，确保正确初始化和清理
                 async with AsyncWebCrawler(config=DEFAULT_BROWSER_CONFIG) as crawler:
+                    # logger.info(f"第 {chunk_index + 1} 组URL的爬虫实例已创建并启动")
+
                     try:
                         # 使用非流式模式获取所有结果
                         results = await crawler.arun_many(
@@ -306,6 +277,45 @@ async def crawl_urls(
                             if progress_callback and callable(progress_callback):
                                 progress_callback(completed_count, urls_count)
 
+                    except RuntimeError as rt_e:
+                        # 处理RuntimeError，如浏览器/页面已关闭的情况
+                        logger.error(
+                            f"第 {chunk_index + 1} 组URL的arun_many调用失败(RuntimeError): {str(rt_e)}"
+                        )
+                        # 如果是浏览器或页面已关闭的错误，设置停止标志
+                        if "closed" in str(rt_e).lower():
+                            should_stop = True
+                            logger.warning("检测到浏览器/页面已关闭，停止所有后续任务")
+
+                        for url in chunk:
+                            error_data = {
+                                "url": url,
+                                "error": f"批量爬取失败(RuntimeError): {str(rt_e)}",
+                            }
+                            errors.append(error_data)
+                            completed_count += 1
+
+                            # 调用进度回调函数，更新任务进度
+                            if progress_callback and callable(progress_callback):
+                                progress_callback(completed_count, urls_count)
+
+                    except asyncio.CancelledError:
+                        # 处理异步取消
+                        logger.info(f"第 {chunk_index + 1} 组URL爬取任务被取消")
+                        should_stop = True
+                        for url in chunk:
+                            error_data = {
+                                "url": url,
+                                "error": "任务被取消",
+                            }
+                            errors.append(error_data)
+                            completed_count += 1
+
+                            # 调用进度回调函数，更新任务进度
+                            if progress_callback and callable(progress_callback):
+                                progress_callback(completed_count, urls_count)
+                        return
+
                     except Exception as inner_e:
                         # 如果arun_many本身失败，记录所有URL为失败
                         logger.error(
@@ -329,6 +339,44 @@ async def crawl_urls(
                     f"第 {chunk_index + 1} 组URL处理完成，耗时: {chunk_duration:.2f}秒"
                 )
 
+            except RuntimeError as rt_e:
+                # 处理RuntimeError，如浏览器/页面已关闭的情况
+                logger.error(
+                    f"第 {chunk_index + 1} 组URL处理失败(RuntimeError): {str(rt_e)}"
+                )
+                # 如果是浏览器或页面已关闭的错误，设置停止标志
+                if "closed" in str(rt_e).lower():
+                    should_stop = True
+                    logger.warning("检测到浏览器/页面已关闭，停止所有后续任务")
+
+                for url in chunk:
+                    error_data = {
+                        "url": url,
+                        "error": f"爬虫实例失败(RuntimeError): {str(rt_e)}",
+                    }
+                    errors.append(error_data)
+                    completed_count += 1
+
+                    # 调用进度回调函数，更新任务进度
+                    if progress_callback and callable(progress_callback):
+                        progress_callback(completed_count, urls_count)
+
+            except asyncio.CancelledError:
+                # 处理异步取消
+                logger.info(f"第 {chunk_index + 1} 组URL爬取任务被取消")
+                should_stop = True
+                for url in chunk:
+                    error_data = {
+                        "url": url,
+                        "error": "任务被取消",
+                    }
+                    errors.append(error_data)
+                    completed_count += 1
+
+                    # 调用进度回调函数，更新任务进度
+                    if progress_callback and callable(progress_callback):
+                        progress_callback(completed_count, urls_count)
+                return
             except Exception as e:
                 # 如果创建爬虫实例或处理整个块时发生异常，记录所有URL为失败
                 logger.error(f"第 {chunk_index + 1} 组URL处理失败: {str(e)}")
@@ -347,12 +395,21 @@ async def crawl_urls(
         task = asyncio.create_task(process_chunk(chunk, i))
         tasks.append(task)
 
-    # 等待所有任务完成，处理可能的异常
-    await asyncio.gather(*tasks, return_exceptions=True)
+    try:
+        # 等待所有任务完成，处理可能的异常
+        await asyncio.gather(*tasks, return_exceptions=True)
+    finally:
+        # 设置停止标志，防止新任务继续执行
+        should_stop = True
+        # logger.info("所有URL组处理完成")
 
     # 刷新批量写入器中剩余的数据
     if batch_writer:
-        await batch_writer.flush()
+        try:
+            await batch_writer.flush()
+            # logger.info("批量写入器刷新完成")
+        except Exception as flush_e:
+            logger.error(f"批量写入器刷新失败: {str(flush_e)}")
 
     end_time = datetime.now()
     total_duration = (end_time - start_time).total_seconds()
@@ -361,9 +418,9 @@ async def crawl_urls(
         f"批量爬取完成: 总耗时 {total_duration:.2f}秒, 成功 {crawled_count} 个, 失败 {len(errors)} 个"
     )
 
-    # 注意：URL内容已通过批量写入器保存到文件
-    if file_name:
-        logger.info(f"所有成功爬取的URL内容已保存到文件: {file_name}")
+    # # 注意：URL内容已通过批量写入器保存到文件
+    # if file_name:
+    #     logger.info(f"所有成功爬取的URL内容已保存到文件: {file_name}")
 
     # 根据是否存储所有数据返回不同的结果
     if should_store_all_data:
@@ -384,139 +441,3 @@ async def crawl_urls(
             "memory_optimized": True,  # 标识已使用内存优化
             "data_saved_to_file": file_name is not None,
         }
-
-
-# async def save_results_to_file(crawled_data, file_name):
-#     """将爬取结果保存到文件
-#
-#     Args:
-#         crawled_data: 爬取的数据列表
-#         file_name: 保存的文件名
-#     """
-#     try:
-#         # 使用路径配置管理目录和文件路径
-#         default_path_config.ensure_results_dir_exists()
-#         file_path = default_path_config.get_output_file_path(file_name)
-#         # logger.info(f"准备写入文件: {file_path}, 共 {len(crawled_data)} 条数据")
-
-#         # 对crawled_data进行清洗过滤，小于50个字符的数据（不包含url）不写入文件，去除开头结尾的空白字符
-#         crawled_data = [item for item in crawled_data if len(item['content']) > 50]
-#         crawled_data = [{'url': item['url'], 'content': item['content'].strip()} for item in crawled_data]
-
-#         # 使用aiofiles异步写入文件（追加模式）
-#         async with aiofiles.open(file_path, "a", encoding="utf-8") as f:
-#             for index, item in enumerate(crawled_data, 1):
-#                 await f.write(f"URL: {item['url']}\n")
-#                 await f.write(f"{item['content']}\n")
-#                 if index % 10 == 0 or index == len(crawled_data):
-#                     logger.info(f"已写入 {index}/{len(crawled_data)} 条数据到文件")
-
-#         logger.info(f"文件写入成功: {file_path}")
-#     except Exception as file_error:
-#         logger.warning(f"异步文件写入失败: {str(file_error)}")
-#         # 尝试使用同步写入作为备选方案
-#         try:
-#             logger.info("尝试使用同步方式写入文件")
-#             with open(file_path, "a", encoding="utf-8") as f:
-#                 for item in crawled_data:
-#                     f.write(f"URL: {item['url']}\n")
-#                     f.write(f"{item['content']}\n\n")
-#             logger.info(f"同步文件写入成功: {file_path}")
-#         except Exception as sync_error:
-#             logger.error(f"同步文件写入也失败: {str(sync_error)}")
-#             # 如果异步和同步写入都失败，忽略错误，继续返回爬取结果
-#             pass
-
-
-# async def crawl_single_url(url, target_elements=None, excluded_tags=None, file_name=None, batch_size=10, flush_interval=30):
-#     """爬取单个URL
-
-#     Args:
-#         url: 要爬取的URL
-#         target_elements: 可选，目标元素配置
-#         excluded_tags: 可选，要排除的标签列表
-#         file_name: 可选，保存结果的文件名
-#         batch_size: 批量写入大小，默认10条
-#         flush_interval: 刷新间隔(秒)，默认30秒
-
-#     Returns:
-#         dict: 包含爬取结果的字典
-#     """
-#     logger.info(f"开始爬取单个URL: {url}")
-#     start_time = datetime.now()
-
-#     run_config = await build_crawler_config(target_elements)
-#     logger.info(f"爬虫配置已构建: target_elements={target_elements}, excluded_tags={excluded_tags}")
-
-#     # 如果用户传了 excluded_tags 则替换掉默认值
-#     if excluded_tags is not None:
-#         logger.info(f"使用自定义排除标签: {excluded_tags}")
-#         # 重新构建配置以应用 excluded_tags
-#         markdown_generator = DefaultMarkdownGenerator(
-#             content_filter=PruningContentFilter(
-#                 threshold=0.48,
-#                 threshold_type="fixed",
-#                 min_word_threshold=0
-#             )
-#         )
-
-#         run_config_kwargs = {
-#             "cache_mode": CacheMode.BYPASS,
-#             "markdown_generator": markdown_generator,
-#             "excluded_tags": excluded_tags,
-#             "exclude_social_media_links": True,
-#             "remove_overlay_elements": True,
-#             "simulate_user": True,
-#             "override_navigator": True,
-#             "exclude_external_images": True,
-#         }
-
-#         if target_elements is not None:
-#             run_config_kwargs["target_elements"] = target_elements
-
-#         run_config = CrawlerRunConfig(**run_config_kwargs)
-
-#     logger.info("初始化AsyncWebCrawler...")
-#     async with AsyncWebCrawler(config=DEFAULT_BROWSER_CONFIG) as crawler:
-#         logger.info(f"开始爬取页面内容: {url}")
-#         crawl_start_time = datetime.now()
-#         result = await crawler.arun(url=url, config=run_config)
-#         crawl_end_time = datetime.now()
-#         crawl_duration = (crawl_end_time - crawl_start_time).total_seconds()
-
-#         if not result.success:
-#             logger.error(f"URL爬取失败: {url}, 错误: {result.error_message or '未知错误'}")
-#             return {
-#                 "success": False,
-#                 "error": result.error_message or '未知错误'
-#             }
-
-#         fit_markdown = getattr(result.markdown, 'fit_markdown', None) or result.markdown
-#         content_length = len(fit_markdown) if fit_markdown else 0
-
-#         end_time = datetime.now()
-#         total_duration = (end_time - start_time).total_seconds()
-
-#         logger.info(f"URL爬取成功: {url}, 内容长度: {content_length}, 爬取耗时: {crawl_duration:.2f}秒, 总耗时: {total_duration:.2f}秒")
-
-#         # 如果提供了file_name，使用批量写入器写入文件
-#         if file_name:
-#             logger.info(f"准备保存结果到文件: {file_name}")
-#             batch_writer = await batch_writer_manager.get_writer(
-#                 file_name=file_name,
-#                 batch_size=batch_size,
-#                 flush_interval=flush_interval
-#             )
-
-#             await batch_writer.add({
-#                 "url": url,
-#                 "content": fit_markdown
-#             })
-
-#             # 对于单个URL，立即刷新
-#             await batch_writer.flush()
-
-#         return {
-#             "success": True,
-#             "content": fit_markdown
-#         }

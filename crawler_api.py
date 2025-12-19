@@ -689,7 +689,42 @@ async def cleanup_on_shutdown():
     """服务器关闭时执行清理操作"""
     logger.info("执行服务器关闭清理操作...")
     try:
-        # 关闭所有批量写入器，确保数据不丢失
+        # 1. 首先尝试取消所有正在运行的任务（简化版本，避免递归）
+        try:
+            # 获取当前任务，避免取消当前清理任务
+            current_task = asyncio.current_task()
+            all_tasks = [
+                task
+                for task in asyncio.all_tasks()
+                if not task.done() and task != current_task
+            ]
+
+            # 过滤掉系统内部任务，只关注我们的业务任务
+            user_tasks = []
+            for task in all_tasks:
+                # 检查任务名称，排除uvicorn和其他系统任务
+                task_name = task.get_name() if hasattr(task, "get_name") else str(task)
+                if not any(
+                    name in task_name for name in ["uvicorn", "Task-", "monitor"]
+                ):
+                    user_tasks.append(task)
+
+            if user_tasks:
+                logger.info(f"发现 {len(user_tasks)} 个用户任务需要取消")
+                # 简单标记取消，不等待完成
+                for task in user_tasks:
+                    try:
+                        if not task.cancelled():
+                            task.cancel()
+                    except Exception:
+                        pass  # 忽略取消过程中的任何异常
+                logger.info("已发送取消信号给所有用户任务")
+            else:
+                logger.info("没有需要取消的用户任务")
+        except Exception as e:
+            logger.error(f"取消任务时发生异常: {str(e)}")
+
+        # 2. 关闭所有批量写入器，确保数据不丢失
         try:
             from utils.batch_writer import batch_writer_manager
 
@@ -701,10 +736,10 @@ async def cleanup_on_shutdown():
         except Exception as e:
             logger.error(f"关闭批量写入器时发生异常: {str(e)}")
 
-        # 断开数据库连接和关闭连接池
+        # 3. 断开数据库连接和关闭连接池
         try:
-            await task_manager.disconnect_db()
-            logger.info("任务管理器数据库连接已断开")
+            # 直接清理任务管理器，不调用disconnect_db方法
+            task_manager.db_manager = None
 
             # 关闭全局连接池
             from utils.db_manager import cleanup_database_resources
@@ -718,6 +753,9 @@ async def cleanup_on_shutdown():
         logger.info("服务器关闭清理操作完成")
     except Exception as e:
         logger.error(f"执行服务器关闭清理操作时发生异常: {str(e)}")
+    finally:
+        # 确保在任何情况下都完成清理
+        logger.info("服务器关闭流程结束")
 
 
 def setup_signal_handlers():
