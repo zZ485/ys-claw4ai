@@ -1,17 +1,5 @@
 import os
 import sys
-
-# 添加项目根目录到系统路径，以便导入项目模块
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# 导入增量爬取辅助模块
-from utils.incremental_crawler import (
-    filter_links_for_crawl,
-    prepare_links_result,
-    get_latest_link_from_db,
-)
 import asyncio
 import argparse
 import aiohttp
@@ -22,6 +10,22 @@ import re
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from typing import List, Optional, Dict
+
+# 添加项目根目录到系统路径，以便导入项目模块
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# 导入配置和增量爬取辅助模块
+from config.logger_config import LoggerConfig
+from utils.incremental_crawler import (
+    filter_links_for_crawl,
+    prepare_links_result,
+    get_latest_link_from_db,
+)
+
+# 获取日志记录器
+logger = LoggerConfig.get_logger(__name__)
 
 
 def get_random_user_agent():
@@ -71,16 +75,13 @@ async def get_fecu_token():
     """通过捕获网络请求获取FECU令牌"""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36..."
-        )
+        context = await browser.new_context(user_agent=get_random_user_agent())
         page = await context.new_page()
 
-        print("正在访问页面获取FECU令牌...")
+        logger.info("正在访问页面获取 FECU 令牌...")
         await page.goto("https://www.ebrun.com/newest/", wait_until="networkidle")
-        await page.wait_for_timeout(1000)  # 确保JS执行完毕
+        await page.wait_for_timeout(1000)
 
-        # 捕获请求以获取FECU令牌
         captured_token = None
 
         def handle_request(request):
@@ -94,26 +95,18 @@ async def get_fecu_token():
         page.on("request", handle_request)
 
         try:
+            # 点击“加载更多”按钮触发 FECU 接口
             await page.click(
                 "#app > main > div.ebrun-global-content > section.main-module > div.button-group > a"
             )
             await page.wait_for_timeout(1000)
         except Exception as e:
-            print(f"点击按钮时出错: {e}")
-            pass
+            logger.warning(
+                f"触发 FECU 令牌点击操作时出错（可能令牌已通过其他方式捕获）: {e}"
+            )
 
         await browser.close()
         return captured_token
-
-
-async def load_fecu_token(filename="fecu_token.txt"):
-    """从文件加载FECU令牌"""
-    try:
-        with open(filename, "r") as f:
-            token = f.read().strip()
-            return token
-    except FileNotFoundError:
-        return None
 
 
 async def random_delay():
@@ -123,73 +116,50 @@ async def random_delay():
 
 
 async def fetch_page(session, page_num, proxy=None, max_retries=3, fecu_token=None):
-    """
-    模拟亿邦动力网站的分页请求，增强反爬虫能力
-    """
-    # 必须提供FECU令牌
+    """模拟亿邦动力网站的分页请求"""
     if not fecu_token:
-        raise ValueError("必须提供FECU令牌")
+        raise ValueError("必须提供 FECU 令牌")
 
-    print(f"使用FECU令牌: {fecu_token[:50]}...")
-
-    # 基础URL
+    # 商业趋势的基础 URL
     base_url = (
         f"https://www.ebrun.com/businessnews/more/{{page}}?date=&FECU={fecu_token}"
     )
-
-    # 构建完整URL
     url = base_url.format(page=page_num)
-
-    # 获取随机请求头
     headers = get_random_headers()
 
-    # 实现重试机制
     for attempt in range(max_retries):
         try:
-            # 随机延时
             if attempt > 0:
                 await random_delay()
 
-            print(f"\n=== 第 {page_num} 页 ===")
-            if attempt > 0:
-                print(f"第 {attempt + 1} 次尝试")
+            logger.info(f"正在爬取第 {page_num} 页 (第 {attempt + 1} 次尝试)...")
             if proxy:
-                print(f"使用代理: {proxy}")
+                logger.debug(f"使用代理: {proxy}")
 
-            # 发送GET请求
             async with session.get(
                 url, headers=headers, proxy=proxy, timeout=10
             ) as response:
                 if response.status == 200:
-                    print(f"响应状态: 成功 (200)")
-
-                    # 尝试解析JSON响应
                     try:
                         data = await response.json()
-                        print(f"响应数据类型: JSON")
                         return data
-                    except:
-                        print(f"响应数据类型: 非JSON")
+                    except Exception:
+                        logger.error(f"第 {page_num} 页解析 JSON 失败")
                         return None
-                elif response.status in [429, 503]:  # 请求过于频繁或服务不可用
-                    retry_after = random.uniform(3, 8) * (attempt + 1)  # 指数退避
-                    print(
-                        f"遇到 {response.status} 错误，等待 {retry_after:.2f} 秒后重试 (第 {attempt + 1} 次)"
+                elif response.status in [429, 503]:
+                    retry_after = random.uniform(3, 8) * (attempt + 1)
+                    logger.warning(
+                        f"请求受限 ({response.status})，等待 {retry_after:.1f} 秒后重试..."
                     )
                     await asyncio.sleep(retry_after)
                 else:
-                    print(f"响应状态: 失败 ({response.status})")
+                    logger.error(f"第 {page_num} 页响应状态异常: {response.status}")
                     if attempt == max_retries - 1:
                         return None
                     await asyncio.sleep(1)
 
-        except aiohttp.ClientError as e:
-            print(f"请求异常: {str(e)}，第 {attempt + 1} 次尝试")
-            if attempt == max_retries - 1:
-                return None
-            await asyncio.sleep(1)
         except Exception as e:
-            print(f"其他异常: {str(e)}，第 {attempt + 1} 次尝试")
+            logger.error(f"第 {page_num} 页请求发生异常: {str(e)}")
             if attempt == max_retries - 1:
                 return None
             await asyncio.sleep(1)
@@ -198,31 +168,20 @@ async def fetch_page(session, page_num, proxy=None, max_retries=3, fecu_token=No
 
 
 def extract_news_img_links(html_content):
-    """
-    从HTML内容中提取.news-img > a中的链接地址
-    """
+    """从HTML内容中提取链接地址"""
     links = []
-
     if not html_content:
         return links
 
-    # 使用BeautifulSoup解析HTML
     soup = BeautifulSoup(html_content, "html.parser")
-
-    # 查找所有class为"news-img"的div
     news_img_divs = soup.find_all("div", class_="news-img")
 
     for div in news_img_divs:
-        # 在每个div中查找a标签
         a_tag = div.find("a")
         if a_tag and a_tag.has_attr("href"):
-            # 获取href属性值
             href = a_tag["href"]
-
-            # 处理相对URL
             if href.startswith("/"):
                 href = f"https://www.ebrun.com{href}"
-
             links.append(href)
 
     return links
@@ -231,16 +190,7 @@ def extract_news_img_links(html_content):
 async def fetch_all_links(
     use_proxy=False, proxy_list=None, max_pages=None, is_incremental=False
 ):
-    """
-    获取所有页面链接，返回完整URL列表
-    增强反爬虫能力：支持代理、随机延时、请求头轮换、FECU令牌自动更新
-
-    参数:
-        use_proxy: 是否使用代理
-        proxy_list: 代理IP列表
-        max_pages: 最大爬取页数，默认为None表示不限制，获取所有页面
-        is_incremental: 是否启用增量模式
-    """
+    """获取所有页面链接"""
     all_links = []
     page_count = 0
 
@@ -249,37 +199,25 @@ async def fetch_all_links(
     if is_incremental:
         latest_link = await get_latest_link_from_db()
         if latest_link:
-            print(f"增量模式：最新链接为 {latest_link}")
+            logger.info(f"增量模式启动：数据库最新链接为 {latest_link}")
         else:
-            print("增量模式：未找到最新链接，将爬取所有链接")
+            logger.info("增量模式启动：未找到历史链接，将进行全量爬取")
 
-    # 准备代理列表
-    proxies = []
-    if use_proxy and proxy_list:
-        proxies = proxy_list
+    proxies = proxy_list if (use_proxy and proxy_list) else []
+    connector = aiohttp.TCPConnector(verify_ssl=False) if proxies else None
 
-    # 如果使用代理，创建带connector的session
-    connector = (
-        aiohttp.TCPConnector(verify_ssl=False) if use_proxy and proxy_list else None
-    )
-
-    # 每次都获取新的FECU令牌
-    print("获取FECU令牌...")
+    logger.info("正在初始化获取 FECU 令牌...")
     fecu_token = await get_fecu_token()
     if not fecu_token:
-        raise Exception("无法获取FECU令牌，爬虫终止")
+        raise Exception("无法获取 FECU 令牌，任务终止")
 
     async with aiohttp.ClientSession(connector=connector) as session:
-        # 记录尝试获取FECU令牌的次数
         fecu_retry_count = 0
         max_fecu_retries = 3
         should_continue = True
 
         while should_continue and (max_pages is None or page_count < max_pages):
             page_num = page_count + 1
-            print(f"正在获取第 {page_num} 页")
-
-            # 随机选择代理（如果启用）
             current_proxy = random.choice(proxies) if proxies else None
 
             data = await fetch_page(
@@ -287,137 +225,82 @@ async def fetch_all_links(
             )
 
             if not data:
-                print("无法获取数据，可能遇到反爬虫限制")
-
-                # 检查是否已经尝试了足够次数
                 fecu_retry_count += 1
                 if fecu_retry_count >= max_fecu_retries:
-                    raise Exception(
-                        f"尝试{max_fecu_retries}次获取FECU令牌仍失败，爬虫终止"
-                    )
+                    logger.critical("无法获取数据且达到 FECU 重试上限，任务强制终止")
+                    break
 
-                # 尝试刷新FECU令牌
-                print(f"尝试刷新FECU令牌 (第{fecu_retry_count}次)...")
+                logger.info(
+                    f"数据获取失败，尝试刷新 FECU 令牌 (第 {fecu_retry_count} 次)..."
+                )
                 fecu_token = await get_fecu_token()
-                if fecu_token:
-                    print("FECU令牌已刷新，重试当前页面...")
-                    # 使用新令牌重试
-                    data = await fetch_page(
-                        session, page_num, current_proxy, fecu_token=fecu_token
-                    )
-                    if not data:
-                        print("刷新FECU令牌后仍无法获取数据")
-                        continue  # 继续尝试下一页
-                else:
-                    print("无法获取新的FECU令牌")
-                    if fecu_retry_count >= max_fecu_retries:
-                        raise Exception(
-                            f"尝试{max_fecu_retries}次获取FECU令牌仍失败，爬虫终止"
-                        )
+                continue
 
             if data and data.get("code") == 200200:
-                # 重置FECU重试计数器
-                fecu_retry_count = 0
+                fecu_retry_count = 0  # 成功获取数据，重置重试计数
+                data_obj = data.get("data", {})
+                is_end = data_obj.get("is_end", 0)
+                quick_news_date = data_obj.get("quick_news_date", "")
+                html_content = data_obj.get("html", "")
 
-                # 检查是否为最后一页
-                is_end = data.get("data", {}).get("is_end", 0)
-                exists_item_count = data.get("data", {}).get("exists_item_count", 0)
-                quick_news_date = data.get("data", {}).get("quick_news_date", "")
-
-                print(
-                    f"日期: {quick_news_date}, 存在项目数: {exists_item_count}, 是否最后一页: {'是' if is_end else '否'}"
+                logger.info(
+                    f"解析成功 -> 日期: {quick_news_date}, 最后一页: {'是' if is_end else '否'}"
                 )
 
-                # 从JSON数据中获取HTML内容
-                html_content = data.get("data", {}).get("html", "")
-
                 if html_content:
-                    # 提取链接
                     page_links = extract_news_img_links(html_content)
 
-                    # 将当前页的链接与已存在的链接合并并去重
                     previous_count = len(all_links)
-                    all_links.extend(page_links)
-                    # 去重并按ID降序排序
-                    unique_links = list(set(all_links))
-                    unique_links.sort(
+                    # 使用有序去重
+                    for link in page_links:
+                        if link not in all_links:
+                            all_links.append(link)
+
+                    # 排序（按ID降序）
+                    all_links.sort(
                         key=lambda x: x.split("/")[-1].split(".")[0], reverse=True
                     )
-                    all_links = unique_links
 
-                    print(f"本页提取到 {len(page_links)} 个链接")
+                    logger.info(f"第 {page_num} 页提取到 {len(page_links)} 个链接")
 
-                    # 增量模式：检查最新链接是否在当前页面中
-                    if is_incremental and latest_link:
-                        if latest_link in page_links:
-                            print(f"第 {page_num} 页包含最新链接，停止爬取")
-                            # 获取最新链接之前的所有链接
-                            index = all_links.index(latest_link)
-                            all_links = all_links[:index]
-                            should_continue = False
-                    elif len(all_links) == previous_count:
-                        # 如果去重后链接数量没有增加，说明该页的链接都已存在，停止爬取
-                        print(f"第 {page_num} 页的所有链接都已存在，停止爬取")
+                    # 增量模式逻辑
+                    if is_incremental and latest_link and latest_link in page_links:
+                        logger.info(
+                            f"第 {page_num} 页包含数据库记录的最新链接，触发增量停止条件"
+                        )
+                        index = all_links.index(latest_link)
+                        all_links = all_links[:index]
                         should_continue = False
 
-                # 全量模式：如果is_end为1，表示已经到达最后一页
-                elif not is_incremental and is_end == 1:
-                    print(f"已到达最后一页（第 {page_num} 页），停止爬取")
+                    # 重复检查逻辑
+                    elif len(all_links) == previous_count and page_num > 1:
+                        logger.info("本页链接已全部存在于收录列表，停止爬取")
+                        should_continue = False
+
+                if not is_incremental and is_end == 1:
+                    logger.info("到达全量爬取终点")
                     should_continue = False
-            elif data:
-                print(f"获取数据失败，响应代码: {data.get('code')}")
+            else:
+                logger.error(
+                    f"服务器返回异常代码: {data.get('code') if data else 'None'}"
+                )
 
             page_count += 1
-
-            # 随机延时，避免请求过于规律
-            if should_continue and (max_pages is None or page_count < max_pages):
+            if should_continue:
                 await random_delay()
 
-    print(f"共获取 {len(all_links)} 条链接")
+    logger.info(f"数据采集结束，累计获取有效新链接 {len(all_links)} 条")
     return all_links
-
-
-def get_proxy_list():
-    """
-    示例代理列表，实际使用时需要替换为有效的代理
-    格式: ["http://ip:port", "http://ip2:port2", ...]
-    """
-    return [
-        # 示例代理，需要替换为真实有效的代理
-        # "http://127.0.0.1:7890",
-        # "http://127.0.0.1:1080",
-    ]
 
 
 async def get_links(
     use_proxy=False, proxy_list=None, max_pages=None, is_incremental=False
 ):
-    """
-    获取亿邦动力网商业趋势文章URL列表，可供外部调用
-
-    参数:
-        use_proxy: 是否使用代理，默认为False
-        proxy_list: 代理IP列表，格式为["http://ip:port", "http://ip2:port2", ...]
-        max_pages: 最大爬取页数，默认为None表示不限制，获取所有页面
-        is_incremental: 是否启用增量模式，默认为False
-
-    返回:
-        dict: 包含links键的字典，符合任务管理器期望的格式
-            {
-                "links": list,    # URL列表
-                "code": int,      # 状态码
-                "msg": str,       # 状态信息
-                "count": int      # 链接总数
-            }
-    """
-    # 如果使用代理但没有提供代理列表，则使用默认代理列表
+    """外部调用入口：获取商业趋势文章列表"""
     if use_proxy and not proxy_list:
-        proxy_list = get_proxy_list()
-        if not proxy_list:
-            print("警告：未配置有效代理，将不使用代理")
-            use_proxy = False
+        logger.warning("未配置有效代理列表，将使用直接连接")
+        use_proxy = False
 
-    # 获取所有URL，传递增量模式参数
     all_links = await fetch_all_links(
         use_proxy=use_proxy,
         proxy_list=proxy_list,
@@ -425,65 +308,50 @@ async def get_links(
         is_incremental=is_incremental,
     )
 
-    # 去重（虽然理论上不会有重复，但确保数据的唯一性）
-    unique_links = list(set(all_links))
-
-    # 排序（按时间顺序，降序，即最新文章在前面）链接示例：1. https://www.ebrun.com/businessnews/20251210/630171.shtml 2. https://www.ebrun.com/businessnews/20251215/630462.shtml
-    # unique_links.sort(key=lambda x: x.split('/')[-1].split('.')[0])
+    # 最终去重与排序（确保逻辑万无一失）
+    unique_links = list(dict.fromkeys(all_links))
     unique_links.sort(key=lambda x: x.split("/")[-1].split(".")[0], reverse=True)
 
-    # 返回符合任务管理器期望的格式
     return prepare_links_result(unique_links, is_incremental)
 
 
 async def main():
-    """命令行运行时的主函数，打印结果到控制台"""
-    # 创建命令行参数解析器
-    parser = argparse.ArgumentParser(description="获取链接")
-    parser.add_argument(
-        "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
-    )
-    parser.add_argument(
-        "--max-pages", type=int, help="限制最大爬取页数（可选，不指定则获取所有页面）"
+    """命令行运行入口"""
+    # 初始化日志
+    LoggerConfig.setup_crawler_logger(
+        log_file="ebrun_business_news_crawler", project_root=project_root
     )
 
-    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="亿邦动力网商业趋势文章爬虫")
+    parser.add_argument("--incremental", action="store_true", help="启用增量模式")
+    parser.add_argument("--max-pages", type=int, help="限制爬取页数")
     args = parser.parse_args()
 
-    # 配置选项
-    use_proxy = False  # 是否使用代理
-
-    print("=== 亿邦动力网商业趋势文章爬虫 ===")
-    mode = "增量模式" if args.incremental else "全量模式"
-    print(f"爬取模式: {mode}")
-    print(f"使用代理: {'是' if use_proxy else '否'}")
-
-    if args.max_pages:
-        print(f"最大页面数限制: {args.max_pages}")
-        print("开始爬取...")
-    else:
-        print("开始爬取...")
-        print("注意: 爬取将获取所有可用页面，直到到达最后一页")
-
-    result = await get_links(
-        use_proxy=use_proxy, max_pages=args.max_pages, is_incremental=args.incremental
+    logger.info("=== 亿邦动力网商业趋势文章爬虫启动 ===")
+    mode_label = "增量模式" if args.incremental else "全量模式"
+    logger.info(
+        f"运行配置 -> 模式: {mode_label}, 最大页数: {args.max_pages or '无限制'}"
     )
 
-    # 打印结果
-    print(f"{mode}：总共获取到 {result['count']} 个链接:")
-    for i, link in enumerate(result["links"], 1):
-        print(f"{i}. {link}")
+    result = await get_links(
+        use_proxy=False, max_pages=args.max_pages, is_incremental=args.incremental
+    )
 
-    # # 可选：将结果保存到文件
-    # save_to_file = input("\n是否将结果保存到文件? (y/n): ").lower() == 'y'
-    # if save_to_file:
-    #     filename = f"ebrun_business_trends_links_{int(time.time())}.txt"
-    #     with open(filename, 'w', encoding='utf-8') as f:
-    #         f.write("\n".join(result['links']))
-    #     print(f"结果已保存到 {filename}")
+    # 打印概览结果
+    logger.info(f"采集结果 [{mode_label}]：共获取到 {result['count']} 个新链接")
+    for i, link in enumerate(result["links"][:10], 1):
+        logger.info(f"{i}. {link}")
+
+    if result["count"] > 10:
+        logger.info(f"... 及其他 {result['count'] - 10} 条链接")
 
     return result
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.info("用户手动停止了任务")
+    except Exception as e:
+        logger.exception(f"程序运行发生未捕获异常: {e}")

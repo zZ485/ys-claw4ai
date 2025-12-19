@@ -1,17 +1,5 @@
 import os
 import sys
-
-# 添加项目根目录到系统路径，以便导入项目模块
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# 导入增量爬取辅助模块
-from utils.incremental_crawler import (
-    filter_links_for_crawl,
-    prepare_links_result,
-    get_latest_link_from_db,
-)
 import asyncio
 import argparse
 import aiohttp
@@ -19,6 +7,22 @@ import json
 import random
 import time
 from typing import List, Optional, Dict
+
+# 添加项目根目录到系统路径，以便导入项目模块
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# 导入配置和增量爬取辅助模块
+from config.logger_config import LoggerConfig
+from utils.incremental_crawler import (
+    filter_links_for_crawl,
+    prepare_links_result,
+    get_latest_link_from_db,
+)
+
+# 获取日志记录器
+logger = LoggerConfig.get_logger(__name__)
 
 
 def get_random_user_agent():
@@ -39,7 +43,6 @@ def get_random_headers():
     """获取随机请求头"""
     user_agent = get_random_user_agent()
     chrome_version = random.choice(["143", "142", "141"])
-    windows_version = random.choice(["10.0", "11.0"])
 
     headers = {
         "accept": random.choice(
@@ -79,84 +82,48 @@ async def fetch_posts_page(session, after_cursor=None, proxy=None, max_retries=3
     url = "https://d.pai.com.cn/graphql"
     headers = get_random_headers()
 
-    query = """
-    query GetPosts($first: Int = 20, $after: String, $show_mode: PostShowMode, $type: PostType, $category: String, $tag: String) {
-      posts(
-        first: $first
-        after: $after
-        show_mode: $show_mode
-        type: $type
-        term_ids: $category
-        tag_ids: $tag
-      ) {
-        edges {
-          cursor
-          node {
-            ...postListItemFragment
-            user {
-              name
-              nickname
-              image
-              __typename
-            }
-            team {
-              slug
-              name
-              avatar
-              __typename
-            }
-            tags {
-              name
-              slug
-              __typename
-            }
-            __typename
-          }
-          __typename
-        }
-        pageInfo {
-          ...replayPageInfoFragment
-          __typename
-        }
-        __typename
-      }
-    }
-    
-    fragment postListItemFragment on Post {
-      id
-      title
-      slug
-      summary
-      url
-      cover_image
-      publish_status
-      view_count
-      status
-      status_desc
-      created_at
-      published_at
-      publish_at_diff_humans
-      deleted_at
-      __typename
-    }
-    
-    fragment replayPageInfoFragment on PageInfo {
-      endCursor
-      count
-      currentPage
-      hasNextPage
-      hasPreviousPage
-      lastPage
-      startCursor
-      total
-      __typename
-    }
+    query = """  
+    query GetPosts($first: Int = 20, $after: String, $show_mode: PostShowMode, $type: PostType, $category: String, $tag: String) {  
+      posts(  
+        first: $first  
+        after: $after  
+        show_mode: $show_mode  
+        type: $type  
+        term_ids: $category  
+        tag_ids: $tag  
+      ) {  
+        edges {  
+          cursor  
+          node {  
+            ...postListItemFragment  
+            user { name nickname image __typename }  
+            team { slug name avatar __typename }  
+            tags { name slug __typename }  
+            __typename  
+          }  
+          __typename  
+        }  
+        pageInfo {  
+          ...replayPageInfoFragment  
+          __typename  
+        }  
+        __typename  
+      }  
+    }  
+      
+    fragment postListItemFragment on Post {  
+      id title slug summary url cover_image publish_status view_count status status_desc created_at published_at publish_at_diff_humans deleted_at __typename  
+    }  
+      
+    fragment replayPageInfoFragment on PageInfo {  
+      endCursor count currentPage hasNextPage hasPreviousPage lastPage startCursor total __typename  
+    }  
     """
 
     payload = {
         "operationName": "GetPosts",
         "variables": {
-            "first": 20,  # 固定每次请求数量
+            "first": 20,
             "category": "5",
             "show_mode": "Zhuanlan",
             "after": after_cursor,
@@ -164,31 +131,29 @@ async def fetch_posts_page(session, after_cursor=None, proxy=None, max_retries=3
         "query": query,
     }
 
-    # 实现重试机制
     for attempt in range(max_retries):
         try:
-            # 随机延时
             if attempt > 0:
                 await random_delay()
 
             async with session.post(
-                url, headers=headers, json=payload, proxy=proxy
+                url, headers=headers, json=payload, proxy=proxy, timeout=15
             ) as response:
                 if response.status == 200:
                     return await response.json()
-                elif response.status in [429, 503]:  # 请求过于频繁或服务不可用
-                    retry_after = random.uniform(3, 8) * (attempt + 1)  # 指数退避
-                    print(
-                        f"遇到 {response.status} 错误，等待 {retry_after:.2f} 秒后重试 (第 {attempt + 1} 次)"
+                elif response.status in [429, 503]:
+                    retry_after = random.uniform(3, 8) * (attempt + 1)
+                    logger.warning(
+                        f"遇到 {response.status} 错误，等待 {retry_after:.1f} 秒后重试 (第 {attempt + 1} 次)"
                     )
                     await asyncio.sleep(retry_after)
                 else:
-                    print(f"请求失败，状态码: {response.status}")
+                    logger.error(f"GraphQL 请求失败，状态码: {response.status}")
                     if attempt == max_retries - 1:
                         return None
                     await asyncio.sleep(1)
         except Exception as e:
-            print(f"请求异常: {str(e)}，第 {attempt + 1} 次尝试")
+            logger.error(f"请求发生异常: {str(e)} (第 {attempt + 1} 次重试)")
             if attempt == max_retries - 1:
                 return None
             await asyncio.sleep(1)
@@ -199,7 +164,6 @@ async def fetch_posts_page(session, after_cursor=None, proxy=None, max_retries=3
 async def fetch_all_posts_urls(use_proxy=False, proxy_list=None, is_incremental=False):
     """
     获取所有专栏文章，返回完整URL列表
-    增强反爬虫能力：支持代理、随机延时、请求头轮换
     """
     all_urls = []
     after_cursor = None
@@ -210,145 +174,141 @@ async def fetch_all_posts_urls(use_proxy=False, proxy_list=None, is_incremental=
     if is_incremental:
         latest_link = await get_latest_link_from_db()
         if latest_link:
-            print(f"增量模式：最新链接为 {latest_link}")
+            logger.info(f"增量模式启动：数据库中最新链接为 {latest_link}")
         else:
-            print("增量模式：未找到最新链接，将爬取所有链接")
+            logger.info("增量模式启动：未找到最新链接记录，将进行全量爬取")
 
-    # 准备代理列表
-    proxies = []
-    if use_proxy and proxy_list:
-        proxies = proxy_list
-
-    # 如果使用代理，创建带connector的session
-    connector = (
-        aiohttp.TCPConnector(verify_ssl=False) if use_proxy and proxy_list else None
-    )
+    proxies = proxy_list if (use_proxy and proxy_list) else []
+    connector = aiohttp.TCPConnector(verify_ssl=False) if proxies else None
 
     async with aiohttp.ClientSession(connector=connector) as session:
         should_continue = True
         while should_continue:
-            print(f"正在获取第 {page_count + 1} 页")
+            logger.info(f"正在获取第 {page_count + 1} 页数据...")
 
-            # 随机选择代理（如果启用）
             current_proxy = random.choice(proxies) if proxies else None
             if current_proxy:
-                print(f"使用代理: {current_proxy}")
+                logger.debug(f"使用代理: {current_proxy}")
 
             data = await fetch_posts_page(session, after_cursor, current_proxy)
 
             if not data:
-                print("无法获取数据，可能遇到反爬虫限制")
+                logger.warning(f"第 {page_count + 1} 页未能获取到有效数据，停止采集")
                 break
 
-            posts = data.get("data", {}).get("posts", {})
-            edges = posts.get("edges", [])
-            page_info = posts.get("pageInfo", {})
+            posts_data = data.get("data", {}).get("posts", {})
+            edges = posts_data.get("edges", [])
+            page_info = posts_data.get("pageInfo", {})
 
-            # 提取本页文章的完整URL
+            if not edges:
+                logger.info("当前页面无文章数据，采集结束")
+                break
+
+            # 提取本页文章
             page_urls = []
             for edge in edges:
                 node = edge.get("node", {})
                 url_path = node.get("url", "")
                 if url_path:
-                    # 拼接完整URL
                     full_url = f"https://www.pai.com.cn{url_path}"
-                    all_urls.append(full_url)
                     page_urls.append(full_url)
 
-            # 增量模式：检查最新链接是否在当前页面中
+            # 增量判断
             if is_incremental and latest_link:
                 if latest_link in page_urls:
-                    print(f"第 {page_count + 1} 页包含最新链接，停止爬取")
-                    # 获取最新链接之前的所有链接
-                    index = all_urls.index(latest_link)
-                    all_urls = all_urls[:index]
+                    logger.info(f"匹配到最新链接，增量采集触发停止条件")
+                    # 截取该链接之前的所有新链接
+                    index = page_urls.index(latest_link)
+                    all_urls.extend(page_urls[:index])
                     should_continue = False
+                else:
+                    all_urls.extend(page_urls)
+            else:
+                all_urls.extend(page_urls)
 
-            # 检查是否还有下一页
-            if not page_info.get("hasNextPage"):
-                print("已到达最后一页")
-                break
+            logger.info(
+                f"第 {page_count + 1} 页处理完成，提取到 {len(page_urls)} 条链接"
+            )
 
-            # 更新游标，用于请求下一页
-            after_cursor = page_info.get("endCursor")
-            page_count += 1
-
-            # 随机延时，避免请求过于规律
-            if should_continue:
+            # 检查下一页
+            if should_continue and page_info.get("hasNextPage"):
+                after_cursor = page_info.get("endCursor")
+                page_count += 1
                 await random_delay()
+            else:
+                if not page_info.get("hasNextPage"):
+                    logger.info("已触达最后一页数据")
+                should_continue = False
 
-    print(f"共获取 {len(all_urls)} 条专栏文章URL")
+    logger.info(f"采集阶段结束，共获取到 {len(all_urls)} 条潜在新文章 URL")
     return all_urls
 
 
-# 示例代理列表（实际使用时需要替换为有效代理）
 def get_proxy_list():
-    """
-    示例代理列表，实际使用时需要替换为有效的代理
-    格式: ["http://ip:port", "http://ip2:port2", ...]
-    """
-    return [
-        # 示例代理，需要替换为真实有效的代理
-        # "http://127.0.0.1:7890",
-        # "http://127.0.0.1:1080",
-    ]
+    """示例代理列表"""
+    return []
 
 
 async def get_links(use_proxy=False, proxy_list=None, is_incremental=False):
     """
-    获取商电报专栏文章URL列表，可供外部调用
-
-    参数:
-        use_proxy: 是否使用代理，默认为False
-        proxy_list: 代理IP列表，格式为["http://ip:port", "http://ip2:port2", ...]
-
-    返回:
-        dict: 包含count和links的字典
-            {
-                "count": int,     # 链接总数
-                "links": list     # URL列表
-            }
+    获取商电报专栏文章URL列表对外接口
     """
-    # 如果使用代理但没有提供代理列表，则使用默认代理列表
     if use_proxy and not proxy_list:
         proxy_list = get_proxy_list()
         if not proxy_list:
-            print("警告：未配置有效代理，将不使用代理")
+            logger.warning("未配置有效代理，切换回直连模式")
             use_proxy = False
 
-    # 获取所有URL，传递增量模式参数
+    # 获取所有URL
     all_urls = await fetch_all_posts_urls(
         use_proxy=use_proxy,
         proxy_list=proxy_list,
         is_incremental=is_incremental,
     )
 
-    # 准备结果
-    return prepare_links_result(all_urls, is_incremental)
+    # 有序去重
+    unique_links = list(dict.fromkeys(all_urls))
+
+    # 返回符合格式的结果
+    return prepare_links_result(unique_links, is_incremental)
 
 
 async def main():
-    """命令行运行时的主函数，打印结果到控制台"""
-    # 创建命令行参数解析器
-    parser = argparse.ArgumentParser(description="获取链接")
-    parser.add_argument(
-        "--incremental", action="store_true", help="启用增量模式（只获取新的链接）"
+    """命令行入口函数"""
+    # 初始化日志配置
+    LoggerConfig.setup_crawler_logger(
+        log_file="pai_column_crawler", project_root=project_root
     )
 
-    # 解析命令行参数
+    parser = argparse.ArgumentParser(description="商电报专栏文章获取工具")
+    parser.add_argument(
+        "--incremental", action="store_true", help="启用增量模式（只获取新文章）"
+    )
+
     args = parser.parse_args()
 
-    # 配置选项
-    use_proxy = False  # 是否使用代理
-
-    result = await get_links(use_proxy=use_proxy, is_incremental=args.incremental)
-
-    # 打印结果
+    logger.info("=== 商电报b2b文章爬虫启动 ===")
     mode = "增量模式" if args.incremental else "全量模式"
-    print(f"{mode}：总共获取到 {result['count']} 个链接:")
-    for i, link in enumerate(result["links"], 1):
-        print(f"{i}. {link}")
+    logger.info(f"爬取模式: {mode}")
+
+    result = await get_links(use_proxy=False, is_incremental=args.incremental)
+
+    logger.info(f"任务结束 [{mode}]：总共获取到 {result['count']} 个链接")
+
+    # 打印前 10 条结果到日志
+    for i, link in enumerate(result["links"][:10], 1):
+        logger.info(f"  {i}. {link}")
+
+    if len(result["links"]) > 10:
+        logger.info(f"  ... 及其余 {len(result['links']) - 10} 条链接")
+
+    return result
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logger.warning("用户手动中断了采集任务")
+    except Exception as e:
+        logger.exception(f"采集任务执行过程中发生严重错误: {e}")
