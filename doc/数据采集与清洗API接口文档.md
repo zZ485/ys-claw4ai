@@ -5,6 +5,25 @@
 - **基础URL**: `http://71gf4110cg54.vicp.fun`
 - **API文档地址**: `http://71gf4110cg54.vicp.fun/docs`
 
+### 服务器启动
+
+使用以下命令启动API服务器：
+
+```bash
+python start_server.py
+```
+
+可选参数：
+- `--host`: 监听地址 (默认: 127.0.0.1)
+- `--port`: 监听端口 (默认: 8001)
+- `--reload`: 启用自动重载 (开发模式)
+- `--log-level`: 日志级别 (critical, error, warning, info, debug)
+
+示例：
+```bash
+python start_server.py --host 0.0.0.0 --port 8080 --reload --log-level debug
+```
+
 ## 通用响应格式
 
 所有API响应都采用统一的JSON格式：
@@ -44,7 +63,91 @@
     "configs": [
       {
         "key": "shanghai_cross_border_association_news",
-        "name": "上海跨境电子商务行业协会-新闻动态"
+        "name": "上海跨境电商协会-行业新闻"
+      },
+      {
+        "key": "shanghai_cross_border_association_data",
+        "name": "上海跨境电商协会-行业数据"
+      },
+      {
+        "key": "shanghai_cross_border_association_policy",
+        "name": "上海跨境电商协会-最新政策"
+      },
+      {
+        "key": "shanghai_cross_border_association_policy_interpretation",
+        "name": "上海跨境电商协会-政策解读"
+      },
+      {
+        "key": "shanghai_cross_border_association_interactive_communication",
+        "name": "上海跨境电商协会-互动交流"
+      },
+      {
+        "key": "ebrun_general",
+        "name": "亿邦动力-最新全部"
+      },
+      {
+        "key": "ebrun_newsflash",
+        "name": "亿邦动力-快讯"
+      },
+      {
+        "key": "ebrun_weight_list",
+        "name": "亿邦动力-独家重磅"
+      },
+      {
+        "key": "ebrun_special_topic",
+        "name": "亿邦动力-专题"
+      },
+      {
+        "key": "ebrun_column",
+        "name": "亿邦动力-专栏"
+      },
+      {
+        "key": "ebrun_business_trends",
+        "name": "亿邦动力-商情动态"
+      },
+      {
+        "key": "ennews_information",
+        "name": "亿恩网-资讯"
+      },
+      {
+        "key": "ennews_newsflash",
+        "name": "亿恩网-快讯"
+      },
+      {
+        "key": "dianshangbao_newsflash",
+        "name": "电商报-快讯"
+      },
+      {
+        "key": "dianshangbao_retail",
+        "name": "电商报-零售"
+      },
+      {
+        "key": "dianshangbao_logistics",
+        "name": "电商报-物流"
+      },
+      {
+        "key": "dianshangbao_life_service",
+        "name": "电商报-生活服务"
+      },
+      {
+        "key": "dianshangbao_b2b",
+        "name": "电商报-B2B"
+      },
+      {
+        "key": "dianshangbao_people",
+        "name": "电商报-人物"
+      },
+      {
+        "key": "dianshangbao_cross_border_ecommerce",
+        "name": "电商报-跨境电商"
+      },
+      {
+        "key": "dianshangbao_industry_observation",
+        "name": "电商报-行业观察"
+      },
+      {
+        "key": "customs_regulations",
+        "name": "海关总署-海关法规"
       }
     ]
   }
@@ -88,8 +191,9 @@
 - `target`: 目标配置，如 `shanghai_cross_border_association_news`，从`/target_configs`接口获取
 - `task_name`: 任务名称
 - `is_incremental`: 是否增量采集，1表示增量采集，0表示全量采集，默认为0
-- `knowledge_base_name`: 知识库名称
+- `knowledge_base_name`: 知识库名称（必须提供）
 - `knowledge_base_id`: 知识库ID（必须提供，用于唯一标识知识库）
+  - 特殊情况：当`knowledge_base_name`和`knowledge_base_id`均为"-1"时，系统将跳过知识库导入
 - `force_upload_by_id`: 是否强制使用ID上传且不检查一致性，true表示强制上传并不检查历史一致性，默认为false
 - `cleaning_config`: 清洗配置，JSON对象，包含以下字段：
   - `source`: 是否清洗来源信息，0表示不清洗，1表示清洗，默认为1
@@ -136,6 +240,7 @@
 - 当 `force_upload_by_id` 为 true 时，系统不会检查历史一致性，直接使用提供的知识库ID进行上传
 - 文档上传时使用`knowledge_base_id`字段进行上传
 - 知识库ID不一致时会返回401错误码，包含上次使用的知识库名称和本次尝试使用的知识库名称信息
+- **特殊处理**：当`knowledge_base_name`和`knowledge_base_id`均为"-1"时，系统将跳过知识库导入，仅保存到本地文件
 
 ---
 
@@ -380,12 +485,12 @@
 
 1. **获取可用配置**
 ```bash
-curl -X GET "http://127.0.0.1:8000/target_configs"
+curl -X GET "http://127.0.0.1:8001/target_configs"
 ```
 
 2. **创建采集任务**
 ```bash
-curl -X POST "http://127.0.0.1:8000/collect" \
+curl -X POST "http://127.0.0.1:8001/collect" \
      -H "Content-Type: application/json" \
      -d '{
        "target": "shanghai_cross_border_association_news",
@@ -404,7 +509,7 @@ curl -X POST "http://127.0.0.1:8000/collect" \
 
 3. **查询任务列表**
 ```bash
-curl -X POST "http://127.0.0.1:8000/tasks" \
+curl -X POST "http://127.0.0.1:8001/tasks" \
      -H "Content-Type: application/json" \
      -d '{
        "page": 1,
@@ -417,10 +522,31 @@ curl -X POST "http://127.0.0.1:8000/tasks" \
 
 4. **下载采集结果**
 ```bash
-curl -X POST "http://127.0.0.1:8000/download" \
+curl -X POST "http://127.0.0.1:8001/download" \
      -H "Content-Type: application/json" \
      -d '{
        "file_name": "task_20231216_001"
      }' \
      --output result.txt
+```
+
+### 跳过知识库导入的示例
+
+如果您只需要将采集结果保存到本地文件，而不需要上传到知识库，可以使用以下方式：
+
+```bash
+curl -X POST "http://127.0.0.1:8001/collect" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "target": "shanghai_cross_border_association_news",
+       "task_name": "采集上海跨境电商新闻（仅本地保存）",
+       "is_incremental": 0,
+       "knowledge_base_name": "-1",
+       "knowledge_base_id": "-1",
+       "cleaning_config": {
+         "source": 1,
+         "image_source": 1,
+         "author": 1
+       }
+     }'
 ```
