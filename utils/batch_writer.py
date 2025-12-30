@@ -69,9 +69,12 @@ class BatchWriter:
                     or len(self.buffer) >= self.max_buffer_size
                 ):
                     await self._flush_buffer()
-                # 如果这是第一个元素，启动定期写入任务
+                # 如果这是第一个元素，启动定期写入任务（在锁内检查和创建，避免竞态条件）
                 elif len(self.buffer) == 1 and self._flush_task is None:
                     self._flush_task = asyncio.create_task(self._periodic_flush())
+                    logger.debug(
+                        f"已启动定期刷新任务，刷新间隔: {self.flush_interval}秒"
+                    )
         except asyncio.CancelledError:
             # 处理取消，尝试刷新已有数据
             logger.debug("批量写入器添加数据时被取消")

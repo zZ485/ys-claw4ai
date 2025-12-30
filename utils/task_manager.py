@@ -554,8 +554,8 @@ class TaskManager:
             try:
                 task_logger = LoggerConfig.get_logger(f"task_{task.task_id}")
                 task_logger.info("任务被取消")
-            except:
-                pass
+            except Exception as e:
+                logger.warning(f"获取任务日志记录器失败: {str(e)}")
 
             if self.db_manager:
                 try:
@@ -579,9 +579,9 @@ class TaskManager:
             try:
                 task_logger.error(f"任务执行失败: {str(e)}")
                 task_logger.error(traceback.format_exc())
-            except:
+            except Exception as log_e:
                 # 如果任务日志记录器不可用，忽略错误
-                pass
+                logger.warning(f"写入任务日志失败: {str(log_e)}")
 
             if self.db_manager:
                 await self.db_manager.update_task(task.task_id, task.to_dict())
@@ -840,13 +840,6 @@ class TaskManager:
             logger.error(error_msg)
             task_logger.error(error_msg)
             # 同样，只记录错误，不修改任务状态
-
-    async def disconnect_db(self):
-        """断开数据库连接"""
-        # 不需要断开连接，因为连接池是全局共享的
-        # 连接池将在应用关闭时关闭
-        if self.db_manager:
-            logger.info("任务管理器数据库连接管理器已断开")
 
 
 # 创建全局任务管理器实例

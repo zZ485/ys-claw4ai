@@ -42,6 +42,8 @@ class ProxyManager:
     def __init__(self):
         self.proxy_queue = asyncio.Queue()
         self._lock = asyncio.Lock()
+        self._get_proxy_retry_count = 0
+        self._max_get_proxy_retries = 3  # 最大重试次数，防止无限递归
 
     async def fetch_and_fill_pool(self):
         """调用工具函数获取已验证的新代理"""
@@ -76,14 +78,31 @@ class ProxyManager:
     async def get_proxy(self) -> str:
         """获取一个可用代理，如果池空了自动刷新"""
         async with self._lock:
+            # 重置重试计数器
+            self._get_proxy_retry_count = 0
+
+            return await self._get_proxy_internal()
+
+    async def _get_proxy_internal(self) -> str:
+        """内部方法：获取代理，支持重试"""
+        async with self._lock:
+            self._get_proxy_retry_count += 1
+
+            if self._get_proxy_retry_count > self._max_get_proxy_retries:
+                raise Exception(
+                    f"获取代理失败：已达到最大重试次数 {self._max_get_proxy_retries}"
+                )
+
             if self.proxy_queue.empty():
                 await self.fetch_and_fill_pool()
 
             if self.proxy_queue.empty():
-                logger.warning("[代理池] 暂时耗尽，等待 5 秒...")
+                logger.warning(
+                    f"[代理池] 暂时耗尽 (重试 {self._get_proxy_retry_count}/{self._max_get_proxy_retries})，等待 5 秒..."
+                )
                 await asyncio.sleep(5)
-                # 递归重试 (注意：如果网络一直不通可能会深层递归，生产环境可加最大深度限制)
-                return await self.get_proxy()
+                # 递归重试，有最大深度限制
+                return await self._get_proxy_internal()
 
             # 取出代理
             proxy = await self.proxy_queue.get()
