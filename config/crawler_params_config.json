@@ -1,27 +1,22 @@
 {
   "crawler_config": {
-    "chunk_size": 4,
     "concurrency_settings": {
       "max_crawlers_by_url_count": [
         {
           "max_urls": 50,
-          "max_crawlers": 1
-        },
-        {
-          "max_urls": 200,
           "max_crawlers": 2
         },
         {
-          "max_urls": 500,
-          "max_crawlers": 3
-        },
-        {
-          "max_urls": 5000,
+          "max_urls": 200,
           "max_crawlers": 4
         },
         {
+          "max_urls": 500,
+          "max_crawlers": 6
+        },
+        {
           "max_urls": 999999,
-          "max_crawlers": 3
+          "max_crawlers": 8
         }
       ]
     },
@@ -45,7 +40,7 @@
         },
         {
           "max_urls": 999999,
-          "batch_size": 20
+          "batch_size": 40
         }
       ]
     },
@@ -82,6 +77,14 @@
     "memory_settings": {
       "memory_optimization_threshold": 500,
       "max_buffer_size_ratio": 0.05
+    },
+    "proxy_settings": {
+      "use_dynamic_proxy": false,
+      "max_consecutive_failures": 3,
+      "page_timeout": 15000,
+      "proxy_check_timeout": 5,
+      "proxy_api_url": "http://www.zdopen.com/ShortProxy/GetIP/?api=202504121800103792&akey=a84329d64bcc4039&timespan=5&type=3",
+      "max_concurrent_validation": 50
     }
   }
 }

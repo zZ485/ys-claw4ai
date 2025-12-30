@@ -49,7 +49,6 @@ class CrawlerParamsConfig:
         """获取默认配置"""
         return {
             "crawler_config": {
-                "chunk_size": 8,
                 "concurrency_settings": {
                     "max_crawlers_by_url_count": [
                         {"max_urls": 50, "max_crawlers": 2},
@@ -98,10 +97,6 @@ class CrawlerParamsConfig:
     def get_config(self) -> Dict[str, Any]:
         """获取完整配置"""
         return self._config.get("crawler_config", {})
-
-    def get_chunk_size(self) -> int:
-        """获取每个爬虫实例处理的URL数量"""
-        return self.get_config().get("chunk_size", 8)
 
     def get_max_crawlers(self, url_count: int) -> int:
         """根据URL数量获取最大并发爬虫实例数"""
@@ -166,6 +161,24 @@ class CrawlerParamsConfig:
                 "max_buffer_size_ratio": 0.1,
             },
         )
+
+    def get_proxy_settings(self) -> Dict[str, Any]:
+        """获取代理设置"""
+        return self.get_config().get(
+            "proxy_settings",
+            {
+                "use_dynamic_proxy": False,
+                "max_consecutive_failures": 3,
+                "page_timeout": 15000,
+                "proxy_check_timeout": 5,
+                "proxy_api_url": "http://www.zdopen.com/ShortProxy/GetIP/?api=202504121800103792&akey=a84329d64bcc4039&timespan=5&type=3",
+                "max_concurrent_validation": 50,
+            },
+        )
+
+    def use_dynamic_proxy(self) -> bool:
+        """是否启用动态代理"""
+        return self.get_proxy_settings().get("use_dynamic_proxy", False)
 
 
 # 创建全局配置实例

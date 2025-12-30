@@ -109,3 +109,6 @@ dmypy.json
 
 # logs
 logs/
+
+# url_list (URL数据文件目录)
+url_list/

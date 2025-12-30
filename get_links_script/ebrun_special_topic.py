@@ -115,7 +115,11 @@ async def random_delay():
 
 
 async def fetch_topic_page(
-    session, page_num: int, fecu_token: str, proxy: Optional[str] = None, max_retries: int = 3
+    session,
+    page_num: int,
+    fecu_token: str,
+    proxy: Optional[str] = None,
+    max_retries: int = 3,
 ) -> Optional[dict]:
     """获取专题页面数据"""
     url = f"https://www.ebrun.com/topic/more/{page_num}?date=&FECU={fecu_token}"
@@ -128,7 +132,9 @@ async def fetch_topic_page(
 
             logger.debug(f"请求第 {page_num} 页专题数据 (第 {attempt + 1} 次尝试)...")
 
-            async with session.get(url, headers=headers, proxy=proxy, timeout=15) as response:
+            async with session.get(
+                url, headers=headers, proxy=proxy, timeout=15
+            ) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data
@@ -163,7 +169,7 @@ def extract_topic_links(html_content: str) -> List[str]:
     # 查找所有带有 data-dmp-url 属性的 li 标签
     for li_tag in soup.find_all("li", attrs={"data-dmp-url": True}):
         dmp_url = li_tag.get("data-dmp-url")
-        if dmp_url and re.match(r'^https://www\.ebrun\.com/tc/\d+\.shtml$', dmp_url):
+        if dmp_url and re.match(r"^https://www\.ebrun\.com/tc/\d+\.shtml$", dmp_url):
             links.append(dmp_url)
 
     return list(dict.fromkeys(links))  # 去重
@@ -176,7 +182,7 @@ def extract_article_links(markdown_content: str) -> List[str]:
         return links
 
     # 匹配 http://www.ebrun.com/数字/数字.shtml 或 https://www.ebrun.com/数字/数字.shtml 格式
-    pattern = r'https?://www\.ebrun\.com/\d+/\d+\.shtml'
+    pattern = r"https?://www\.ebrun\.com/\d+/\d+\.shtml"
     matches = re.findall(pattern, markdown_content)
 
     for match in matches:
@@ -192,9 +198,7 @@ async def crawl_topic_page(topic_url: str) -> Optional[str]:
         cache_mode=CacheMode.BYPASS,
     )
 
-    browser_config = BrowserConfig(
-        user_agent_mode="random"
-    )
+    browser_config = BrowserConfig(user_agent_mode="random")
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(url=topic_url, config=run_config)
@@ -237,9 +241,7 @@ async def fetch_all_topic_links(
             page_num = page_count + 1
             current_proxy = random.choice(proxies) if proxies else None
 
-            data = await fetch_topic_page(
-                session, page_num, fecu_token, current_proxy
-            )
+            data = await fetch_topic_page(session, page_num, fecu_token, current_proxy)
 
             if not data:
                 fecu_retry_count += 1
@@ -325,7 +327,8 @@ async def crawl_all_articles_from_topics(
 
     # 排序（按日期和ID降序）
     all_article_links.sort(
-        key=lambda x: (int(x.split("/")[-2]), int(x.split("/")[-1].split(".")[0])), reverse=True
+        key=lambda x: (int(x.split("/")[-2]), int(x.split("/")[-1].split(".")[0])),
+        reverse=True,
     )
 
     logger.info(f"文章爬取阶段结束，共获取 {len(all_article_links)} 个文章链接")
@@ -364,7 +367,8 @@ async def get_links(
     # 4. 最终确保唯一和排序
     unique_links = list(dict.fromkeys(article_links))
     unique_links.sort(
-        key=lambda x: (int(x.split("/")[-2]), int(x.split("/")[-1].split(".")[0])), reverse=True
+        key=lambda x: (int(x.split("/")[-2]), int(x.split("/")[-1].split(".")[0])),
+        reverse=True,
     )
 
     return prepare_links_result(unique_links, is_incremental)
