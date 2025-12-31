@@ -76,6 +76,7 @@ class CrawlerParamsConfig:
                     "progress_after_fetch": 20,
                     "progress_after_crawl": 90,
                     "progress_complete": 100,
+                    "progress_update_interval": 5,
                 },
                 "error_handling": {
                     "max_retry_attempts": 3,
@@ -138,6 +139,7 @@ class CrawlerParamsConfig:
                 "progress_after_fetch": 20,
                 "progress_after_crawl": 90,
                 "progress_complete": 100,
+                "progress_update_interval": 5,
             },
         )
 

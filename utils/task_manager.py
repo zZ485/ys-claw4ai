@@ -451,6 +451,7 @@ class TaskManager:
             progress_after_crawl = progress_settings.get("progress_after_crawl", 90)
 
             def progress_callback(completed: int, total: int):
+                """进度回调函数，只更新内存中的任务进度，不直接更新数据库"""
                 if total > 0:
                     progress_range = progress_after_crawl - progress_after_fetch
                     progress_per_link = progress_range / total
@@ -459,21 +460,45 @@ class TaskManager:
                     )
                     task.progress = min(progress_after_crawl, current_progress)
 
-                    # 实时更新数据库中的进度
-                    if self.db_manager:
-                        asyncio.create_task(
-                            self.db_manager.update_task(task.task_id, task.to_dict())
-                        )
-
             target_elements = configs[task.collection_template]
 
-            # 从配置中获取内存优化阈值
+            # 从配置中获取内存优化阈值和定时更新间隔
             memory_optimization_threshold = memory_settings.get(
                 "memory_optimization_threshold", 1000
             )
+            progress_update_interval = progress_settings.get(
+                "progress_update_interval", 5
+            )
+
+            # 创建定时更新数据库进度的异步任务
+            periodic_update_task = None
+            stop_periodic_update = asyncio.Event()
+
+            async def periodic_update_progress():
+                """定时更新任务进度到数据库"""
+                while not stop_periodic_update.is_set():
+                    try:
+                        await asyncio.sleep(progress_update_interval)
+                        if self.db_manager:
+                            await self.db_manager.update_task(
+                                task.task_id, task.to_dict()
+                            )
+                            logger.debug(
+                                f"定时更新任务 {task.task_id} 进度: {task.progress}%"
+                            )
+                    except asyncio.CancelledError:
+                        break
+                    except Exception as e:
+                        logger.warning(f"定时更新任务进度失败: {str(e)}")
 
             task_logger.info(f"开始爬取 {len(links)} 个链接")
             try:
+                # 启动定时更新任务
+                periodic_update_task = asyncio.create_task(periodic_update_progress())
+                logger.info(
+                    f"已启动定时更新任务，更新间隔: {progress_update_interval}秒"
+                )
+
                 result = await crawl_urls(
                     urls=links,
                     target_elements=target_elements,
@@ -485,6 +510,15 @@ class TaskManager:
                     cleaning_config=task.cleaning_config,  # 传递清洗配置
                 )
             except asyncio.CancelledError:
+                # 停止定时更新任务
+                stop_periodic_update.set()
+                if periodic_update_task:
+                    periodic_update_task.cancel()
+                    try:
+                        await periodic_update_task
+                    except asyncio.CancelledError:
+                        pass
+
                 logger.info(f"任务 {task.task_id} 被取消")
                 task_logger.info("任务被取消")
                 task.status = TaskStatus.CANCELLED
@@ -502,6 +536,15 @@ class TaskManager:
                     task_logger.warning(f"更新取消任务到数据库失败: {str(e)}")
 
                 return
+
+            # 停止定时更新任务
+            stop_periodic_update.set()
+            if periodic_update_task:
+                periodic_update_task.cancel()
+                try:
+                    await periodic_update_task
+                except asyncio.CancelledError:
+                    pass
 
             # 更新任务结果
             task.progress = progress_after_crawl
@@ -565,6 +608,15 @@ class TaskManager:
                         f"更新取消任务 {task.task_id} 到数据库失败: {str(e)}"
                     )
         except Exception as e:
+            # 停止定时更新任务
+            stop_periodic_update.set()
+            if periodic_update_task:
+                periodic_update_task.cancel()
+                try:
+                    await periodic_update_task
+                except asyncio.CancelledError:
+                    pass
+
             task.status = TaskStatus.FAILED
             task.failure_reason = str(e)
             task.completed_at = datetime.now()
