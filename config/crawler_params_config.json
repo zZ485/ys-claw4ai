@@ -81,10 +81,12 @@
     },
     "proxy_settings": {
       "use_dynamic_proxy": false,
+      "use_static_proxy": false,
+      "static_proxy_url": "http://127.0.0.1:8888",
       "max_consecutive_failures": 3,
       "page_timeout": 15000,
       "proxy_check_timeout": 5,
-      "proxy_api_url": "http://www.zdopen.com/ShortProxy/GetIP/?api=202504121800103792&akey=a84329d64bcc4039&timespan=5&type=3",
+      "proxy_api_url": "",
       "max_concurrent_validation": 50
     }
   }

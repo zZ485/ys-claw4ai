@@ -405,15 +405,6 @@ class TaskManager:
                     f"脚本 {script_name} 返回了空的链接列表 可能原因：1.获取链接脚本失效 2.增量模式下无新增文章链接"
                 )
 
-            # # 保存最新链接
-            # if links and self.db_manager:
-            #     try:
-            #         await self.db_manager.save_latest_link(
-            #             task.collection_template, links[0]
-            #         )
-            #     except Exception as e:
-            #         logger.error(f"保存最新链接失败: {str(e)}")
-
             # 动态设置任务参数
             links_count = len(links)
             progress_settings = crawler_params_config.get_progress_settings()
@@ -566,6 +557,22 @@ class TaskManager:
                 f"失败 {result['error_count']} 个, "
                 f"文件保存为: {task.file_name}.txt"
             )
+
+            # 增量模式下，任务成功后保存最新链接（供下次增量爬取作为起点）
+            if task.is_incremental == 1 and links and self.db_manager:
+                try:
+                    await self.db_manager.save_latest_link(
+                        task.collection_template, links[0]
+                    )
+                    logger.info(
+                        f"增量模式：已保存最新链接 {links[0]} (模板: {task.collection_template})"
+                    )
+                    task_logger.info(
+                        f"增量模式：已保存最新链接 {links[0]}"
+                    )
+                except Exception as e:
+                    logger.error(f"保存最新链接失败: {str(e)}")
+                    task_logger.error(f"保存最新链接失败: {str(e)}")
 
             # 只有满足以下所有条件才会上传到知识库：
             # 1. 知识库名称不为空

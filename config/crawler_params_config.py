@@ -170,6 +170,8 @@ class CrawlerParamsConfig:
             "proxy_settings",
             {
                 "use_dynamic_proxy": False,
+                "use_static_proxy": False,
+                "static_proxy_url": "",
                 "max_consecutive_failures": 3,
                 "page_timeout": 15000,
                 "proxy_check_timeout": 5,
@@ -181,6 +183,14 @@ class CrawlerParamsConfig:
     def use_dynamic_proxy(self) -> bool:
         """是否启用动态代理"""
         return self.get_proxy_settings().get("use_dynamic_proxy", False)
+
+    def use_static_proxy(self) -> bool:
+        """是否启用静态代理（适用于内网通过正向代理访问外网的场景）"""
+        return self.get_proxy_settings().get("use_static_proxy", False)
+
+    def get_static_proxy_url(self) -> str:
+        """获取静态代理地址"""
+        return self.get_proxy_settings().get("static_proxy_url", "")
 
 
 # 创建全局配置实例

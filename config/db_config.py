@@ -1,11 +1,13 @@
 """
 数据库配置模块
-用于管理达梦数据库的连接配置
+用于管理 SQLite 数据库的连接配置
+兼容旧版达梦数据库配置接口
 """
 
 import os
 import json
-from typing import Dict, Any, Optional
+from typing import Any, Dict
+
 from config.logger_config import LoggerConfig
 
 # 获取日志记录器
@@ -35,48 +37,30 @@ def get_db_config() -> Dict[str, Any]:
 
         db_config = config_data.get("database", {})
 
-        # 如果配置文件中缺少某些字段，从环境变量获取
-        db_config = {
-            "host": os.getenv("DB_HOST", db_config.get("host", "localhost")),
-            "port": int(os.getenv("DB_PORT", str(db_config.get("port", 5236)))),
-            "user": os.getenv("DB_USER", db_config.get("user", "SYSDBA")),
-            "password": os.getenv("DB_PASSWORD", db_config.get("password", "123456yY")),
-            "database": os.getenv("DB_NAME", db_config.get("database", "SYSDBA")),
+        # 构建配置（保留旧字段以兼容上层代码，但 SQLite 不使用它们）
+        result = {
+            "type": db_config.get("type", "sqlite"),
+            "database": os.getenv("DB_NAME", db_config.get("database", "crawler")),
             "log_sql": os.getenv(
                 "DB_LOG_SQL", str(db_config.get("log_sql", "false"))
             ).lower()
             == "true",
             "pool_size": int(
-                os.getenv("DB_POOL_SIZE", str(db_config.get("pool_size", "10")))
+                os.getenv("DB_POOL_SIZE", str(db_config.get("pool_size", "5")))
             ),
+            # 以下字段保留以兼容旧接口，SQLite 不使用
+            "host": "localhost",
+            "port": 0,
+            "user": "",
+            "password": "",
         }
 
-        # # 记录当前使用的配置（隐藏密码）
-        # logger.info(
-        #     f"数据库配置 - 主机: {db_config['host']}, 端口: {db_config['port']}, 用户: {db_config['user']}, 数据库: {db_config['database']}"
-        # )
-
-        # 检查是否所有必要的配置都已设置
-        missing_fields = [
-            k
-            for k, v in db_config.items()
-            if not v and k in ["user", "password", "database"]
-        ]
-        if missing_fields:
-            logger.warning(f"数据库配置中缺少必要字段: {', '.join(missing_fields)}")
-
-        # 验证端口是否有效
-        if not (1 <= db_config["port"] <= 65535):
-            logger.error(f"无效的端口号: {db_config['port']}")
-            raise ValueError(f"无效的端口号: {db_config['port']}")
-
-        return db_config
+        return result
     except ValueError as e:
         logger.error(f"数据库配置解析错误: {str(e)}")
         raise
     except Exception as e:
         logger.error(f"获取数据库配置时发生未知错误: {str(e)}")
-        # 如果读取配置文件失败，返回默认配置
         logger.warning("使用默认数据库配置")
         return _get_default_config()
 
@@ -89,13 +73,14 @@ def _get_default_config() -> Dict[str, Any]:
         Dict: 默认数据库配置信息
     """
     return {
+        "type": "sqlite",
         "host": "localhost",
-        "port": 5236,
-        "user": "SYSDBA",
-        "password": "123456yY",
-        "database": "SYSDBA",
+        "port": 0,
+        "user": "",
+        "password": "",
+        "database": "crawler",
         "log_sql": False,
-        "pool_size": 10,  # 添加连接池大小的默认配置
+        "pool_size": 5,
     }
 
 
@@ -109,11 +94,9 @@ def validate_db_config(config: Dict[str, Any]) -> bool:
     Returns:
         bool: 配置是否有效
     """
-    required_fields = ["host", "port", "user", "password", "database"]
-
-    for field in required_fields:
-        if field not in config or not config[field]:
-            logger.error(f"数据库配置缺少必要字段: {field}")
-            return False
+    # SQLite 只需要 database 字段
+    if "database" not in config or not config["database"]:
+        logger.error("数据库配置缺少必要字段: database")
+        return False
 
     return True

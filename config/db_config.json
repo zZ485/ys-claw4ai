@@ -1,12 +1,9 @@
 {
   "database": {
-    "host": "localhost",
-    "port": 5236,
-    "user": "SYSDBA",
-    "password": "123456yY",
-    "database": "SYSDBA",
-    "description": "达梦数据库连接配置",
+    "type": "sqlite",
+    "database": "crawler",
+    "description": "SQLite 数据库配置，database 字段为数据库文件名（不含 .db 后缀），默认存储在项目 data/ 目录下",
     "log_sql": false,
-    "pool_size": 10
+    "pool_size": 5
   }
 }

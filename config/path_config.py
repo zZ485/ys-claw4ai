@@ -22,7 +22,7 @@ def load_config():
     except Exception as e:
         print(f"加载路径配置文件失败: {e}")
         return {
-            "default_project_root": "e:/py_project/crawl4ai",
+            "default_project_root": "",
             "default_results_dir": "results",
         }
 
@@ -38,9 +38,14 @@ class PathConfig:
             project_root: 项目根目录，如果为None则使用配置文件中的默认值
         """
         config = load_config()
-        self.project_root = project_root or config.get(
-            "default_project_root", "e:/py_project/crawl4ai"
-        )
+        configured_root = project_root or config.get("default_project_root", "")
+        if configured_root:
+            self.project_root = configured_root
+        else:
+            # 自动推断：config 目录的上上级就是项目根目录
+            self.project_root = os.path.dirname(
+                os.path.dirname(os.path.abspath(__file__))
+            )
         self.default_results_dir = config.get("default_results_dir", "results")
 
     def get_results_dir(self) -> str:

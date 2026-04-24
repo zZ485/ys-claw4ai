@@ -158,6 +158,8 @@ async def crawl_urls(
 
     # 获取代理配置
     use_dynamic_proxy = crawler_params_config.use_dynamic_proxy()
+    use_static_proxy = crawler_params_config.use_static_proxy()
+    static_proxy_url = crawler_params_config.get_static_proxy_url()
     proxy_settings = crawler_params_config.get_proxy_settings()
     max_consecutive_failures = proxy_settings.get("max_consecutive_failures", 3)
     # 单个URL最大重试次数 (防止无限死循环)
@@ -168,6 +170,7 @@ async def crawl_urls(
         f"开始批量爬取，共 {urls_count} 个URL，批量写入大小: {batch_size}, 刷新间隔: {flush_interval}秒"
     )
     logger.info(f"动态代理: {'启用' if use_dynamic_proxy else '禁用'}")
+    logger.info(f"静态代理: {'启用' if use_static_proxy else '禁用'}" + (f" ({static_proxy_url})" if use_static_proxy and static_proxy_url else ""))
 
     start_time = datetime.now()
 
@@ -218,11 +221,20 @@ async def crawl_urls(
 
     # --- 代理初始化 ---
     proxy_manager = None
-    if use_dynamic_proxy:
+    fixed_proxy_url = None  # 静态代理模式下使用的固定代理地址
+
+    if use_static_proxy and static_proxy_url:
+        # 静态代理模式：直接使用配置的代理地址，无需 ProxyManager
+        fixed_proxy_url = static_proxy_url
+        logger.info(f"使用静态代理: {fixed_proxy_url}")
+    elif use_dynamic_proxy:
+        # 动态代理模式：从 API 获取代理池并轮换
         proxy_manager = ProxyManager()
         await proxy_manager.fetch_and_fill_pool()
         if proxy_manager.proxy_queue.qsize() == 0:
             logger.warning("动态代理池为空，将不使用代理")
+    else:
+        logger.info("未启用代理，直接连接目标网站")
 
     # --- 数据存储 ---
     crawled_count = 0
@@ -244,7 +256,11 @@ async def crawl_urls(
 
         # 初始获取代理
         current_proxy = None
-        if use_dynamic_proxy and proxy_manager:
+        if use_static_proxy and fixed_proxy_url:
+            # 静态代理模式：所有 worker 共用同一个代理
+            current_proxy = fixed_proxy_url
+            logger.info(f"[Worker-{worker_id}] 🟢 就绪 | 静态代理: {current_proxy}")
+        elif use_dynamic_proxy and proxy_manager:
             try:
                 current_proxy = await proxy_manager.get_proxy()
                 logger.info(f"[Worker-{worker_id}] 🟢 就绪 | 初始代理: {current_proxy}")
@@ -253,7 +269,7 @@ async def crawl_urls(
 
         # Worker 主循环
         while True:
-            # 1. 代理轮换检查
+            # 1. 代理轮换检查（仅动态代理模式）
             if (
                 consecutive_failures >= max_consecutive_failures
                 and use_dynamic_proxy
@@ -275,7 +291,24 @@ async def crawl_urls(
                 "extra_args": BASE_BROWSER_CONFIG_ARGS,
             }
             if current_proxy:
-                browser_config_kwargs["proxy"] = current_proxy
+                # 使用 ProxyConfig 替代已废弃的 proxy 参数
+                try:
+                    from crawl4ai import ProxyConfig
+                    from urllib.parse import urlparse as _urlparse
+                    parsed_proxy = _urlparse(current_proxy)
+                    proxy_server = f"{parsed_proxy.scheme}://{parsed_proxy.hostname}"
+                    if parsed_proxy.port:
+                        proxy_server += f":{parsed_proxy.port}"
+                    proxy_kwargs = {"server": proxy_server}
+                    if parsed_proxy.username:
+                        proxy_kwargs["username"] = parsed_proxy.username
+                    if parsed_proxy.password:
+                        proxy_kwargs["password"] = parsed_proxy.password
+                    browser_config_kwargs["proxy_config"] = ProxyConfig(**proxy_kwargs)
+                except (ImportError, Exception) as e:
+                    # 降级使用旧的 proxy 参数
+                    logger.debug(f"ProxyConfig 不可用，使用 proxy 参数: {e}")
+                    browser_config_kwargs["proxy"] = current_proxy
 
             browser_config = BrowserConfig(**browser_config_kwargs)
 
@@ -287,7 +320,12 @@ async def crawl_urls(
                     while True:
                         # 代理连续失败检查
                         if consecutive_failures >= max_consecutive_failures:
-                            break  # 跳出内层循环 -> 更换代理
+                            if use_static_proxy and fixed_proxy_url:
+                                # 静态代理模式：不换代理，重置计数继续工作
+                                logger.warning(f"[Worker-{worker_id}] 静态代理连续失败 {consecutive_failures} 次，重置计数继续尝试")
+                                consecutive_failures = 0
+                            else:
+                                break  # 跳出内层循环 -> 更换动态代理
 
                         # >>> 修复点：鲁棒的队列获取逻辑 <<<
                         try:
@@ -423,7 +461,11 @@ async def crawl_urls(
             except Exception as e_session:
                 logger.error(f"[Worker-{worker_id}] 浏览器会话崩溃: {e_session}")
                 await asyncio.sleep(1)
-                consecutive_failures = max_consecutive_failures  # 触发换IP
+                if use_static_proxy and fixed_proxy_url:
+                    # 静态代理模式：不换代理，重置计数继续尝试
+                    consecutive_failures = 0
+                else:
+                    consecutive_failures = max_consecutive_failures  # 触发换IP
 
             # 如果队列确实空了，跳出外层循环
             if task_queue.empty():

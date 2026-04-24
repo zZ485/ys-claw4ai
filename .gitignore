@@ -1,5 +1,9 @@
-# 忽略results目录
+# 项目输出目录
 results/
+data/
+
+# CodeBuddy 项目数据
+.codebuddy/
 
 # Python
 __pycache__/
