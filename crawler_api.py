@@ -139,7 +139,7 @@ class TaskListRequest(BaseModel):
     # 等值匹配条件
     collection_template: Optional[str] = None  # 采集模板（等值匹配）
     task_type: Optional[int] = (
-        0  # 任务类型（0-全量，1-增量）（等值匹配），默认为0（全量）
+        None  # 任务类型（0-全量，1-增量）（等值匹配），不传则查全部
     )
     task_status: Optional[str] = None  # 任务状态（等值匹配）
     knowledge_base_name: Optional[str] = None  # 知识库（等值匹配）
@@ -517,8 +517,8 @@ async def get_tasks_with_pagination(request: TaskListRequest):
         # 等值匹配条件
         if request.collection_template:
             query_conditions["collection_template"] = request.collection_template
-        # task_type 现在默认为0（全量），所以总是包含在查询条件中
-        query_conditions["task_type"] = request.task_type
+        if request.task_type is not None:
+            query_conditions["task_type"] = request.task_type
         if request.task_status:
             query_conditions["task_status"] = request.task_status
         if request.knowledge_base_name:
