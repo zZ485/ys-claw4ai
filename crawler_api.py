@@ -336,7 +336,7 @@ async def collect_data(request: CollectRequest):
                         new_kb_name = request.knowledge_base_name or "未知知识库"
                         error_msg = f"该模板上次导入「{old_kb_name}」，本次导入「{new_kb_name}」，请确认！"
                         logger.warning(f"知识库ID不一致: {error_msg}")
-                        return build_response(code=401, message=error_msg)
+                        return build_response(code=400, message=error_msg)
             except Exception as e:
                 logger.error(f"检查知识库一致性时发生错误: {str(e)}")
                 # 发生错误时不阻止任务创建，仅记录日志
