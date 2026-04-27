@@ -1,6 +1,6 @@
 {
   "knowledge_base": {
-    "api_base_url": "http://192.168.9.47:8000",
+    "api_base_url": "http://192.168.125.153:8000",
     "upload_timeout": 300,
     "auto_upload": false
   }
