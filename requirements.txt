@@ -1,25 +1,25 @@
-# Web 框架
+
 fastapi>=0.100.0
 uvicorn>=0.23.0
 pydantic>=2.0.0
 
-# 异步 HTTP 客户端
+
 aiohttp>=3.8.0
 
-# 异步文件操作
+
 aiofiles>=23.0.0
 
-# 同步 HTTP 客户端
+
 requests>=2.31.0
 
-# 网页爬取核心库
+
 crawl4ai>=0.4.0
 
-# HTML 解析
+
 beautifulsoup4>=4.12.0
 
-# 浏览器自动化
+
 playwright>=1.40.0
 
-# 剪贴板操作
+
 pyperclip>=1.8.0
