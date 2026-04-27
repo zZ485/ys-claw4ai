@@ -104,7 +104,7 @@ app.add_middleware(
 class CollectRequest(BaseModel):
     target: str  # 目标配置，如 shanghai_cross_border_association_news（必须提供）
     task_name: str  # 任务名称（必须提供）
-    is_incremental: int = 0  # 是否增量，1表示增量采集，0表示全量采集
+    task_type: int = 0  # 任务类型，1表示增量采集，0表示全量采集
     knowledge_base_name: str  # 知识库名称（必须提供）
     knowledge_base_id: str  # 知识库ID（必须提供）
     force_upload_by_id: bool = False  # 是否强制使用ID上传且不检查一致性
@@ -289,7 +289,7 @@ async def collect_data(request: CollectRequest):
     采集数据接口：创建异步采集任务，立即返回任务ID
     """
     logger.info(
-        f"收到数据采集请求: target={request.target}, task_name={request.task_name}, is_incremental={request.is_incremental}, knowledge_base_name={request.knowledge_base_name}, knowledge_base_id={request.knowledge_base_id}, force_upload_by_id={request.force_upload_by_id}"
+        f"收到数据采集请求: target={request.target}, task_name={request.task_name}, is_incremental={request.task_type}, knowledge_base_name={request.knowledge_base_name}, knowledge_base_id={request.knowledge_base_id}, force_upload_by_id={request.force_upload_by_id}"
     )
 
     try:
@@ -353,7 +353,7 @@ async def collect_data(request: CollectRequest):
         task_id = await task_manager.create_task(
             target=request.target,
             task_name=request.task_name,
-            is_incremental=request.is_incremental,
+            is_incremental=request.task_type,
             db_config=db_config,
             knowledge_base_name=request.knowledge_base_name,
             knowledge_base_id=request.knowledge_base_id,
@@ -362,7 +362,7 @@ async def collect_data(request: CollectRequest):
         )
 
         logger.info(
-            f"已创建采集任务: {task_id}, 任务名称: {request.task_name}, 任务类型: {'增量采集' if request.is_incremental == 1 else '全量采集'}"
+            f"已创建采集任务: {task_id}, 任务名称: {request.task_name}, 任务类型: {'增量采集' if request.task_type == 1 else '全量采集'}"
         )
 
         # 立即返回任务创建成功响应
@@ -373,7 +373,7 @@ async def collect_data(request: CollectRequest):
                 "task_id": task_id,
                 "target": request.target,
                 "task_name": request.task_name,
-                "is_incremental": request.is_incremental,
+                "is_incremental": request.task_type,
                 "knowledge_base_name": request.knowledge_base_name,
                 "knowledge_base_id": request.knowledge_base_id,
                 "force_upload_by_id": request.force_upload_by_id,

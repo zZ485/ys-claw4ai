@@ -6,6 +6,7 @@ SQLite 数据库操作模块
 """
 
 import asyncio
+import contextvars
 import os
 import sqlite3
 import threading
@@ -129,8 +130,8 @@ class ConnectionPool:
         # SQLite 数据库文件路径
         self.db_path = None
 
-        # 当前获取的连接（上下文管理器用）
-        self._acquired_conn: DatabaseConnection | None = None
+        # 当前获取的连接（使用 contextvars 确保协程安全）
+        self._acquired_conn_var = contextvars.ContextVar('acquired_conn', default=None)
 
         # 健康检查线程
         self._health_check_thread = None
@@ -226,11 +227,12 @@ class ConnectionPool:
 
     async def __aenter__(self):
         """异步上下文管理器入口：获取连接"""
-        return self._acquired_conn.connection
+        conn = self._acquired_conn_var.get()
+        return conn.connection
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """异步上下文管理器出口：归还连接"""
-        conn = getattr(self, '_acquired_conn', None)
+        conn = self._acquired_conn_var.get()
         if conn:
             conn.in_use = False
             try:
@@ -240,7 +242,7 @@ class ConnectionPool:
             if exc_type:
                 conn.is_valid = False
                 logger.error(f"使用连接时发生错误: {exc_val}")
-        self._acquired_conn = None
+        self._acquired_conn_var.set(None)
         return False
 
     def get_connection(self):
@@ -248,7 +250,7 @@ class ConnectionPool:
         if self._closed:
             raise RuntimeError("连接池已关闭")
         # 重新获取连接并返回 self 作为上下文管理器
-        self._acquired_conn = self._acquire_connection()
+        self._acquired_conn_var.set(self._acquire_connection())
         return self
 
     def _acquire_connection(self) -> DatabaseConnection:
