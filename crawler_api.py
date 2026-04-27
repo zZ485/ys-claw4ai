@@ -307,7 +307,8 @@ async def collect_data(request: CollectRequest):
         )
 
         # 知识库一致性检查（除非强制上传）
-        if not request.force_upload_by_id:
+        # 仅当本次和上次都明确导入了知识库（ID不为"-1"）时，才检查一致性
+        if not request.force_upload_by_id and request.knowledge_base_id != "-1":
             # 如果提供了知识库ID，则需要检查与之前任务的一致性
             try:
                 from utils.db_manager import get_db_manager
@@ -326,7 +327,12 @@ async def collect_data(request: CollectRequest):
                 latest_task = await db_manager.get_latest_task_by_template(
                     request.target
                 )
-                if latest_task and latest_task.get("knowledge_base_id"):
+                # 仅当上次任务也明确导入了知识库（ID不为"-1"）时，才检查一致性
+                if (
+                    latest_task
+                    and latest_task.get("knowledge_base_id")
+                    and latest_task["knowledge_base_id"] != "-1"
+                ):
                     # 检查知识库ID是否一致
                     if latest_task["knowledge_base_id"] != request.knowledge_base_id:
                         # 使用知识库名称而不是ID显示错误信息
