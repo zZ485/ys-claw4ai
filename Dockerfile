@@ -8,7 +8,7 @@ WORKDIR /app
 
 # 安装 Python 依赖
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 安装 Playwright Chromium 浏览器及其所有系统依赖（关键步骤）
 RUN playwright install --with-deps chromium
