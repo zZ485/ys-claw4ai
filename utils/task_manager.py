@@ -761,6 +761,23 @@ class TaskManager:
                 if task.get("complete_time") and keyword in task["complete_time"]
             ]
 
+        # 时间段查询条件（按创建时间筛选）
+        if query_conditions.get("start_time"):
+            start_time = query_conditions["start_time"]
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if task.get("create_time") and str(task["create_time"]) >= start_time
+            ]
+
+        if query_conditions.get("end_time"):
+            end_time = query_conditions["end_time"]
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if task.get("create_time") and str(task["create_time"]) <= end_time
+            ]
+
         # 等值匹配条件
         if query_conditions.get("collection_template"):
             template = query_conditions["collection_template"]
@@ -768,6 +785,14 @@ class TaskManager:
                 task
                 for task in filtered_tasks
                 if task.get("collection_template") == template
+            ]
+
+        if query_conditions.get("collection_template_in"):
+            templates = query_conditions["collection_template_in"]
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if task.get("collection_template") in templates
             ]
 
         if query_conditions.get("task_type") is not None:
@@ -788,6 +813,14 @@ class TaskManager:
                 task
                 for task in filtered_tasks
                 if task.get("knowledge_base_name") == kb_name
+            ]
+
+        if query_conditions.get("knowledge_base_name_like"):
+            kb_keyword = query_conditions["knowledge_base_name_like"].lower()
+            filtered_tasks = [
+                task
+                for task in filtered_tasks
+                if kb_keyword in task.get("knowledge_base_name", "").lower()
             ]
 
         total = len(filtered_tasks)

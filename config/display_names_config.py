@@ -57,6 +57,23 @@ class ConfigDisplayNames:
         return config.get(config_key, config_key)
 
     @classmethod
+    def get_key_by_display_name(cls, display_name: str) -> str:
+        """
+        根据显示名称反查配置键值
+
+        Args:
+            display_name: 显示名称
+
+        Returns:
+            对应的配置键值，如果不存在则返回None
+        """
+        config = load_config()
+        for key, value in config.items():
+            if value == display_name:
+                return key
+        return None
+
+    @classmethod
     def get_formatted_configs(cls) -> list:
         """
         获取格式化的配置列表，用于API返回

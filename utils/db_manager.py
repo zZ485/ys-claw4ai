@@ -619,8 +619,8 @@ class DatabaseManager:
                 task_data.get("knowledge_base_id", ""),
                 cleaning_config_str,
                 task_data.get("failure_reason"),
-                task_data.get("create_time", datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
-                task_data.get("complete_time"),
+                self._format_time_str(task_data.get("create_time")) or datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                self._format_time_str(task_data.get("complete_time")),
                 int(task_data.get("progress", 0)),
                 int(task_data.get("total_links", 0)),
                 int(task_data.get("success_count", 0)),
@@ -675,9 +675,7 @@ class DatabaseManager:
                 cleaning_config_str = str(cleaning_config)
 
             # 处理时间字段：确保是字符串格式
-            complete_time = task_data.get("complete_time")
-            if complete_time and hasattr(complete_time, "strftime"):
-                complete_time = complete_time.strftime("%Y-%m-%d %H:%M:%S")
+            complete_time = self._format_time_str(task_data.get("complete_time"))
 
             params = (
                 task_data.get("task_name"),
@@ -729,8 +727,30 @@ class DatabaseManager:
             logger.error(traceback.format_exc())
             return None
 
+    @staticmethod
+    def _format_time_str(val) -> str:
+        """统一时间格式为 YYYY-MM-DD HH:MM:SS，处理 datetime 对象、微秒、时区等"""
+        if not val:
+            return val
+        if hasattr(val, "strftime"):
+            return val.strftime("%Y-%m-%d %H:%M:%S")
+        if isinstance(val, str):
+            # 去掉微秒部分
+            if "." in val:
+                val = val.split(".")[0]
+            # 去掉时区后缀（如 +08:00）
+            if "+" in val or val.endswith("Z"):
+                val = val.split("+")[0].rstrip("Z")
+            # 补全缺少秒的情况（如 "2026-04-28 10:02" -> "2026-04-28 10:02:00"）
+            if len(val.split(" ")) == 2 and val.count(":") == 1:
+                val = val + ":00"
+            return val.strip()
+        return str(val)
+
     def _map_db_task_to_app(self, db_task: Dict[str, Any]) -> Dict[str, Any]:
         """将数据库任务记录映射为应用层任务对象"""
+        from config.display_names_config import ConfigDisplayNames
+
         # SQLite 列名已统一为小写，直接取值即可
         create_time = db_task.get("create_time")
         complete_time = db_task.get("complete_time")
@@ -749,17 +769,20 @@ class DatabaseManager:
             except (json.JSONDecodeError, TypeError):
                 cleaning_config = {"source": 1, "image_source": 1, "author": 1}
 
-        # 处理时间字段格式化
-        if create_time and not isinstance(create_time, str):
-            create_time = create_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(create_time, "strftime") else str(create_time)
-        if complete_time and not isinstance(complete_time, str):
-            complete_time = complete_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(complete_time, "strftime") else str(complete_time)
+        # 处理时间字段格式化：统一为 YYYY-MM-DD HH:MM:SS
+        create_time = self._format_time_str(create_time)
+        complete_time = self._format_time_str(complete_time)
+
+        # 采集模板翻译为显示名称
+        collection_template = db_task.get("collection_template", "")
+        collection_template_display = ConfigDisplayNames.get_display_name(collection_template)
 
         return {
             "task_id": db_task.get("task_id"),
             "task_name": db_task.get("task_name"),
             "task_status": db_task.get("task_status"),
-            "collection_template": db_task.get("collection_template"),
+            "collection_template": collection_template,
+            "collection_template_display": collection_template_display,
             "task_type": task_type,
             "is_incremental": task_type == 1,
             "knowledge_base_name": db_task.get("knowledge_base_name", ""),
@@ -834,16 +857,16 @@ class DatabaseManager:
                 params.append(f"%{query_conditions['task_name_like']}%")
                 count_params.append(f"%{query_conditions['task_name_like']}%")
 
-            # 时间段查询条件
+            # 时间段查询条件（按创建时间筛选）
             if query_conditions.get("start_time"):
-                where_conditions.append("complete_time >= ?")
-                count_where_conditions.append("complete_time >= ?")
+                where_conditions.append("create_time >= ?")
+                count_where_conditions.append("create_time >= ?")
                 params.append(query_conditions["start_time"])
                 count_params.append(query_conditions["start_time"])
 
             if query_conditions.get("end_time"):
-                where_conditions.append("complete_time <= ?")
-                count_where_conditions.append("complete_time <= ?")
+                where_conditions.append("create_time <= ?")
+                count_where_conditions.append("create_time <= ?")
                 params.append(query_conditions["end_time"])
                 count_params.append(query_conditions["end_time"])
 
@@ -853,6 +876,15 @@ class DatabaseManager:
                 count_where_conditions.append("collection_template = ?")
                 params.append(query_conditions["collection_template"])
                 count_params.append(query_conditions["collection_template"])
+
+            # 采集模板多值匹配（支持同时传中英文）
+            if query_conditions.get("collection_template_in"):
+                templates = query_conditions["collection_template_in"]
+                placeholders = ",".join(["?"] * len(templates))
+                where_conditions.append(f"collection_template IN ({placeholders})")
+                count_where_conditions.append(f"collection_template IN ({placeholders})")
+                params.extend(templates)
+                count_params.extend(templates)
 
             if query_conditions.get("task_type") is not None:
                 where_conditions.append("task_type = ?")
@@ -871,6 +903,12 @@ class DatabaseManager:
                 count_where_conditions.append("knowledge_base_name = ?")
                 params.append(query_conditions["knowledge_base_name"])
                 count_params.append(query_conditions["knowledge_base_name"])
+
+            if query_conditions.get("knowledge_base_name_like"):
+                where_conditions.append("knowledge_base_name LIKE ?")
+                count_where_conditions.append("knowledge_base_name LIKE ?")
+                params.append(f"%{query_conditions['knowledge_base_name_like']}%")
+                count_params.append(f"%{query_conditions['knowledge_base_name_like']}%")
 
             where_clause = (
                 " WHERE " + " AND ".join(where_conditions) if where_conditions else ""

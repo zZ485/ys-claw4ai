@@ -522,13 +522,22 @@ async def get_tasks_with_pagination(request: TaskListRequest):
 
         # 等值匹配条件
         if request.collection_template:
-            query_conditions["collection_template"] = request.collection_template
+            # 同时支持英文名（key）和中文名（显示名称）查询
+            template_key = ConfigDisplayNames.get_key_by_display_name(
+                request.collection_template
+            )
+            if template_key:
+                # 传入的是中文名，同时匹配中英文对应的key
+                query_conditions["collection_template_in"] = [template_key]
+            else:
+                # 传入的是英文名key，直接匹配
+                query_conditions["collection_template"] = request.collection_template
         if request.task_type is not None:
             query_conditions["task_type"] = request.task_type
         if request.task_status:
             query_conditions["task_status"] = request.task_status
         if request.knowledge_base_name:
-            query_conditions["knowledge_base_name"] = request.knowledge_base_name
+            query_conditions["knowledge_base_name_like"] = request.knowledge_base_name
 
         result = await task_manager.get_tasks_with_pagination(
             request.page, request.page_size, query_conditions=query_conditions
